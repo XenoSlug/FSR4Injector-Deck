@@ -7,9 +7,9 @@ const { harness, all, find, findText, settle } = require('./frontend_harness.cjs
 const DLO = '~/.dlo/run %command%';
 const TOKEN = 'WINEDLLOVERRIDES=amdxc64=n,b';
 const game = { appid: 1817070, name: 'Spider-Man', target_dir: '/g', anticheat: false, enabled: false, verdict: 'unknown', reason: '' };
-const gpu890 = { device: 0x150e, family: 150, rev: 20, arch: 'RDNA 3.5', model: 'INT8_LITE', model_name: 'INT8 Lite', verified: true };
+const gpuDeck = { device: 0x163f, family: 144, rev: 3, arch: 'Steam Deck (Van Gogh)', model: 'INT8_LITE', model_name: 'INT8 Lite', verified: true };
 const state = (over = {}) => ({
-  version: '1.0.0', home: '/home/deck', dll_ready: true, shim_ready: true, gpu: gpu890, error: '',
+  version: '1.0.0', home: '/home/deck', dll_ready: true, shim_ready: true, gpu: gpuDeck, error: '',
   recipe: { driver: 'Adrenalin 26.10.1', fsr: '4.1.2', dll_size: 1 }, eula_url: 'https://x',
   download: { state: 'idle', done: 0, total: 1, error: '' }, scanned: true, games: [game],
   settings: { auto_launch_options: true, watermark: false, session_toast: false },
@@ -400,17 +400,14 @@ test('About is the last row; its page has the plugin facts and updates at the bo
   assert.ok(toggleOf(h.render(), 'Spider-Man'), 'back on the main page');
 });
 
-test('GPU line: verified, beta, and a GPU AMD has no model for', async () => {
+test('GPU line: verified Steam Deck and unsupported GPU', async () => {
   let h = panel();
   let tree = await open(h);
-  assert.match(text(tree), /RDNA 3\.5 GPU \| PCI 1002:150e\. AMD's FSR 4\.1\.2 picks its INT8 Lite model here\./);
+  assert.match(text(tree), /Steam Deck \(Van Gogh\) GPU \| PCI 1002:163f\. AMD's FSR 4\.1\.2 picks its INT8 Lite model here\./);
   assert.doesNotMatch(text(tree), /Beta/);
   h = panel();
-  tree = await open(h, state({ gpu: { ...gpu890, device: 0x163f, family: 144, rev: 1, arch: 'RDNA 2 APU (Van Gogh)', verified: false } }));
-  assert.match(text(tree), /Beta \| FSR 4 is not tested on this GPU yet\. Report problems on GitHub\./);
-  h = panel();
-  tree = await open(h, state({ gpu: { ...gpu890, device: 0x15bf, family: 148, arch: 'RDNA 3 APU', model: null, model_name: '' } }));
-  assert.match(text(tree), /GPU not supported \| AMD's FSR 4 has no model for this GPU \(RDNA 3 APU, PCI 1002:15bf\)/);
+  tree = await open(h, state({ gpu: { ...gpuDeck, model: null, model_name: '' } }));
+  assert.match(text(tree), /GPU not supported \| Only Steam Deck \(Van Gogh\) is supported by this edition\./);
   assert.ok(toggleOf(tree, game.name).props.disabled, 'nothing can be turned on without a model');
   assert.ok(!button(tree, 'Turn on FSR4 in all games'));
 });

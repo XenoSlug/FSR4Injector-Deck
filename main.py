@@ -59,9 +59,9 @@ def _home():
 
 def gpu_unsupported(gpu):
     if not gpu:
-        return "No AMD GPU was found, or its details could not be read."
-    return (f"AMD's FSR 4 has no model for this GPU (PCI 1002:{gpu['device']:04x}, family {gpu['family']}, "
-            f"revision {gpu['rev']}), so games would stay on FSR 3.")
+        return "No Steam Deck GPU was found, or its details could not be read."
+    return (f"FSR4 Injector (Deck Edition) requires a Steam Deck (detected PCI 1002:{gpu['device']:04x}, "
+            f"family {gpu['family']}, revision {gpu['rev']}).")
 
 
 def _load_settings(path):

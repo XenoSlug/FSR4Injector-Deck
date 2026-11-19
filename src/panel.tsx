@@ -205,7 +205,7 @@ export const Content: FC = () => {
   }}>
     <PageHeader title="About" back={NAME} onBack={() => navigate(null)} focus={visible} />
     <AboutPage name={NAME} version={state.version} license="BSD-3-Clause" source="github.com/XenoSlug/FSR4Injector-Deck"
-      description="AMD's official FSR 4 upscaler, with the Lite model made for handhelds, in FSR 3.1 games under Proton."
+      description="AMD's official FSR 4 upscaler, with the Lite model for Steam Deck, in FSR 3.1 games under Proton."
       notes="The amdxc64 shim is LGPL-2.1+; its source is included in the plugin package."
       updates={updater()} home={state.home} install={`${INSTALL_HINT} Your games stay set up.`} />
   </Focusable>;
@@ -246,13 +246,13 @@ export const Content: FC = () => {
         {gpu?.model && !gpu.verified && infoRow("Beta", "FSR 4 is not tested on this GPU yet. Report problems on GitHub.")}
         <PanelSectionRow>
           {!gpu ? (
-            <Field label="No AMD GPU found" description="FSR4 Injector needs an AMD Radeon GPU." />
+            <Field label="No Steam Deck GPU found" description="FSR4 Injector requires a Steam Deck." />
           ) : gpu.model ? (
             <Field label={`${gpu.arch} GPU`}
               description={`PCI ${pci}. AMD's FSR ${state.recipe.fsr} picks its ${gpu.model_name} model here.`} />
           ) : (
             <Field label="GPU not supported"
-              description={`AMD's FSR 4 has no model for this GPU (${gpu.arch}, PCI ${pci}), so games stay on FSR 3.`} />
+              description="Only Steam Deck (Van Gogh) is supported by this edition." />
           )}
         </PanelSectionRow>
         {state.dll_ready ? (

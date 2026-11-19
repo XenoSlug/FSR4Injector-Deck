@@ -165,8 +165,8 @@ class Games(PluginTest):
         self.p.dll_ok = False
         self.assertIn("Download", (await self.p.enable_game(APPID, ""))["error"])
         self.p.dll_ok = True
-        self.p.gpu = {**GPU, "family": 148, "model": None}  # e.g. a 780M: AMD has no model
-        self.assertIn("no model for this GPU", (await self.p.enable_game(APPID, ""))["error"])
+        self.p.gpu = {**GPU, "family": 148, "model": None}  # unsupported non-Deck GPU
+        self.assertIn("requires a Steam Deck", (await self.p.enable_game(APPID, ""))["error"])
         self.assertIn("rescan", (await self.p.enable_game(1, ""))["error"])
 
     async def test_enable_and_disable_restore_folder_and_options(self):
