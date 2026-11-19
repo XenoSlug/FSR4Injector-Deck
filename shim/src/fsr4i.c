@@ -28,11 +28,10 @@ typedef unsigned char (*is_supported_fn)(void *provider, void *device);
 typedef struct { UINT hAdapter; UINT Type; void *pPrivateDriverData; UINT PrivateDriverDataSize; } QUERYADAPTERINFO;
 
 /* Fallback when the plugin's fsr4injector.gpu is missing: real values as RADV_DEBUG=info reports them (family_id,
- * chip_external_rev). Lite model needs family 144 (Van Gogh: 1..0x7F) or family 150 (Strix Point: 1..0x3F). */
+ * chip_external_rev). Lite model needs family 144 (Van Gogh: 1..0x7F). */
 static const struct { USHORT device; UINT family, rev; } gpus[] = {
     { 0x163f, 144, 3 },  /* Steam Deck LCD (Aerith / Van Gogh): family 144, chip_external_rev 3 */
     { 0x1435, 144, 3 },  /* Steam Deck OLED (Sephiroth / Van Gogh): family 144, chip_external_rev 3 */
-    { 0x150e, 150, 20 }, /* Strix Point, Legion Go 2: family_id 150, chip_external_rev 20 */
 };
 
 /* FFX checks providers in this order and uses the first supported one. */

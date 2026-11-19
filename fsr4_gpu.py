@@ -19,12 +19,10 @@ AMDGPU_INFO_DEV_INFO = 0x16
 # Families (AMDGPU_FAMILY_*): 143 NV (RDNA1/2), 144 VGH (Van Gogh), 145 GC 11.0 (RDNA3), 150 GC 11.5 (RDNA 3.5),
 # 152 GC 12 (RDNA4).
 MODELS = {"FP8": "FP8", "INT8": "INT8", "INT8_NAVI2": "INT8 (RDNA2)", "INT8_LITE": "INT8 Lite"}
-ARCH = {143: "RDNA 1/2", 144: "Steam Deck (Van Gogh)", 145: "RDNA 3", 148: "RDNA 3 APU", 150: "RDNA 3.5",
-        152: "RDNA 4"}
+ARCH = {144: "Steam Deck (Van Gogh)"}
 # (family, revision range) combinations checked on real hardware.
 VERIFIED = [
     (144, 1, 0x7F),  # Steam Deck LCD (Aerith) & OLED (Sephiroth)
-    (150, 1, 0x3F),  # Radeon 880M/890M (Strix Point), Legion Go 2
 ]
 
 
@@ -65,7 +63,6 @@ def _query(path):
 KNOWN = {
     0x163F: (144, 3),   # Steam Deck LCD (Aerith)
     0x1435: (144, 3),   # Steam Deck OLED (Sephiroth)
-    0x150E: (150, 20),  # Radeon 890M, Legion Go 2
 }
 
 

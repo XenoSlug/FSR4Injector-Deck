@@ -27,11 +27,10 @@ class Model(unittest.TestCase):
         for (family, rev), model in cases.items():
             self.assertEqual(G.expected_model(family, rev), model, (family, rev))
 
-    def test_steam_deck_and_strix_point_are_verified(self):
-        self.assertTrue(G.is_verified(150, 20))
+    def test_steam_deck_is_verified(self):
         self.assertTrue(G.is_verified(144, 1))
         self.assertTrue(G.is_verified(144, 3))
-        self.assertFalse(G.is_verified(150, 0xC1))
+        self.assertFalse(G.is_verified(150, 20))
 
 
 class Detect(unittest.TestCase):

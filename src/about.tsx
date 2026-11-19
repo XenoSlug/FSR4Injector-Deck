@@ -235,11 +235,11 @@ export function AboutPage({ name, version, description, license, source, notes, 
   return <>
     <PanelSection title={name}>
       {infoRow(`Version ${version}`, description)}
-      {infoRow("Author", <>{["Rayek", license, source].filter(Boolean).join(" · ")}{notes && <div>{notes}</div>}</>)}
+      {infoRow("Author", <>{["XenoSlug", license, source].filter(Boolean).join(" · ")}{notes && <div>{notes}</div>}</>)}
+      {infoRow("Credits", "Forked from Rayekkk/FSR4Injector (Rayek)")}
       {credits.map(([label, text]) => <div key={label}>{infoRow(label, text)}</div>)}
     </PanelSection>
     {children}
-    <StoreSection />
     {updates &&<UpdateSection controller={updates} version={version} home={home} install={install} />}
   </>;
 }

@@ -76,12 +76,11 @@ int main(int argc, char **argv)
     /* written as UTF-8 whatever code page Wine uses for the system language */
     CHECK(json && strstr(json, "\"compat_tool\":\"/home/deck/Proton \\\"11\\\"\\\\x \xc5\xbb\xc3\xb3\xc5\x82w\""));
 
-    /* GPU table: only verified parts get an answer */
+    /* GPU table: only verified Steam Deck parts get an answer */
     CHECK(fsr4i_lookup_family(0x1002, 0x163f, &family, &rev) && family == 144 && rev == 3);
     CHECK(fsr4i_lookup_family(0x1002, 0x1435, &family, &rev) && family == 144 && rev == 3);
-    CHECK(fsr4i_lookup_family(0x1002, 0x150e, &family, &rev) && family == 150 && rev == 20);
-    CHECK(!fsr4i_lookup_family(0x1002, 0x744c, &family, &rev)); /* RDNA3 dGPU: real driver data not ours to invent */
-    CHECK(!fsr4i_lookup_family(0x10de, 0x150e, &family, &rev));
+    CHECK(!fsr4i_lookup_family(0x1002, 0x744c, &family, &rev));
+    CHECK(!fsr4i_lookup_family(0x10de, 0x163f, &family, &rev));
 
     /* values from the plugin's file win over the table, but only for the GPU they describe */
     WCHAR gpu_path[MAX_PATH];
@@ -90,7 +89,7 @@ int main(int argc, char **argv)
     fprintf(g, "5695 144 3\n"); /* 0x163f Van Gogh */
     fclose(g);
     CHECK(fsr4i_lookup_family(0x1002, 0x163f, &family, &rev) && family == 144 && rev == 3);
-    CHECK(fsr4i_lookup_family(0x1002, 0x150e, &family, &rev) && family == 150 && rev == 20); /* file is for 0x163f */
+    CHECK(fsr4i_lookup_family(0x1002, 0x1435, &family, &rev) && family == 144 && rev == 3); /* file is for 0x163f, OLED table used */
     CHECK(!fsr4i_lookup_family(0x1002, 0x744c, &family, &rev));
     _wremove(gpu_path);
 
