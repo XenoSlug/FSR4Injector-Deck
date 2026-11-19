@@ -14,14 +14,14 @@ import fsr4_gpu as G
 class Model(unittest.TestCase):
     def test_amd_dll_rules(self):
         cases = {
-            (150, 20): "INT8_LITE",    # Radeon 890M (Strix Point), measured on a Legion Go 2
-            (150, 0xC1): "INT8",       # Strix Halo
-            (144, 1): "INT8_LITE",     # Van Gogh (Steam Deck, Z2 A)
-            (143, 0x28): "INT8_NAVI2", # RX 6800 (Navi 21)
-            (143, 0x46): "INT8_NAVI2", # RX 6500 (Navi 24)
-            (143, 0x01): None,         # Navi 10 (RDNA1): no model
+            (150, 20): "INT8_LITE",    # RDNA 3.5 APU
+            (150, 0xC1): "INT8",
+            (144, 1): "INT8_LITE",     # Steam Deck (Van Gogh)
+            (143, 0x28): "INT8_NAVI2", # RX 6800
+            (143, 0x46): "INT8_NAVI2", # RX 6500
+            (143, 0x01): None,         # RDNA1: no model
             (145, 0x01): "INT8",       # RX 7000
-            (148, 0x01): None,         # Phoenix (780M, Z1 Extreme): AMD has no model
+            (148, 0x01): None,         # Unsupported APU: no model
             (152, 0x01): "FP8",        # RX 9000
         }
         for (family, rev), model in cases.items():
