@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="FSR4Injector.png" alt="FSR4 Injector" width="760">
+<img src="FSR4Injector.png" alt="FSR4 Injector" width="100%">
 
 [![Release](https://img.shields.io/github/v/release/XenoSlug/FSR4Injector-Deck?style=for-the-badge&label=release&color=C2410C&labelColor=141417)](https://github.com/XenoSlug/FSR4Injector-Deck/releases/latest)
 [![GPU](https://img.shields.io/badge/GPU-Steam_Deck_(LCD_+_OLED)-0969DA?style=for-the-badge&labelColor=141417)](#requirements)
