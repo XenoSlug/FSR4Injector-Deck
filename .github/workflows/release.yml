@@ -1,0 +1,84 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+      - '[0-9]+.[0-9]+.[0-9]+*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-release:
+    name: Build and publish release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: true
+
+      - name: Install MinGW-w64
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends gcc-mingw-w64-x86-64
+
+      - name: Compile shim for Windows/Proton
+        run: |
+          CFLAGS_EXTRA=-Werror bash shim/build.sh
+          # Verify exports
+          x86_64-w64-mingw32-objdump -p bin/amdxc64.dll > exports.txt
+          grep -q AmdExtD3DCreateInterface exports.txt
+          grep -q AmdGetDxcModuleHandle exports.txt
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.14'
+
+      - name: Install locked frontend dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Build Decky release package
+        run: npm run package
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: FSR4Injector-Deck-package
+          path: |
+            artifacts/*.zip
+            artifacts/*.zip.sha256
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.ref_name }}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ -z "$TAG" ]; then
+            VERSION=$(jq -r '.version' plugin.json)
+            TAG="v${VERSION}"
+          fi
+          
+          # Create or update release
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG exists, uploading assets..."
+            gh release upload "$TAG" artifacts/*.zip artifacts/*.zip.sha256 --clobber
+          else
+            echo "Creating new release $TAG..."
+            gh release create "$TAG" artifacts/*.zip artifacts/*.zip.sha256 \
+              --title "FSR4 Injector (Deck) $TAG" \
+              --notes "Official AMD FSR 4.1.2 Lite upscaler optimized for Steam Deck (Van Gogh LCD & OLED) under Proton."
+          fi

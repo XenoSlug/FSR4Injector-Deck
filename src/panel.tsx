@@ -204,7 +204,7 @@ export const Content: FC = () => {
     navigate(null);
   }}>
     <PageHeader title="About" back={NAME} onBack={() => navigate(null)} focus={visible} />
-    <AboutPage name={NAME} version={state.version} license="BSD-3-Clause" source="github.com/Rayekkk/FSR4Injector"
+    <AboutPage name={NAME} version={state.version} license="BSD-3-Clause" source="github.com/XenoSlug/FSR4Injector-Deck"
       description="AMD's official FSR 4 upscaler, with the Lite model made for handhelds, in FSR 3.1 games under Proton."
       notes="The amdxc64 shim is LGPL-2.1+; its source is included in the plugin package."
       updates={updater()} home={state.home} install={`${INSTALL_HINT} Your games stay set up.`} />

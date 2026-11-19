@@ -1,6 +1,6 @@
 {
   "name": "FSR4 Injector",
-  "author": "Rayek",
+  "author": "XenoSlug (forked from Rayek)",
   "flags": [],
   "api_version": 1,
   "main": "main.py",
@@ -11,7 +11,7 @@
       "utilities",
       "graphics"
     ],
-    "description": "Official AMD FSR 4.1 (Lite) in FSR 3.1+ games on RDNA 3.5 handhelds under Proton.",
+    "description": "Official AMD FSR 4.1.2 Lite in FSR 3.1+ games on Steam Deck (LCD & OLED) under Proton.",
     "image": "https://raw.githubusercontent.com/Rayekkk/FSR4Injector/main/FSR4Injector.png"
   }
 }

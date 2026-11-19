@@ -16,7 +16,7 @@ FFX_DLLS = ("amd_fidelityfx_dx12.dll", "amd_fidelityfx_upscaler_dx12.dll", "amd_
 # Not "vanguard": Riot's lives outside game folders, and the word names game files (Mass Effect's Vanguard class).
 ANTICHEAT = ("easyanticheat", "battleye", "beservice", "start_protected_game.exe", "eac_launcher",
              "xigncode", "gameguard", "npgamemon", "punkbuster", "pbsvc", "equ8")
-MAX_DEPTH = 5
+MAX_DEPTH = 7
 
 _KV = re.compile(r'"([^"]+)"\s+"([^"]*)"')
 _UPLAY_LAUNCH = re.compile(r"uplay://launch/(\d+)")

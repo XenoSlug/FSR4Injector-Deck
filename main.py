@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2026 Rayekkk
 
-"""FSR4Injector - official AMD FSR 4.1 (Lite model) for RDNA 3.5 APUs under Proton.
+"""FSR4Injector (Deck) - official AMD FSR 4.1.2 (Lite model) for Steam Deck (Van Gogh) APUs under Proton.
 
 Two files go next to a game's FidelityFX DLL: AMD's own amdxcffx64.dll (fetched from AMD, see fsr4_dll) and our
 amdxc64.dll shim (shim/, LGPL), which tells the AMD DLL the GPU family Wine cannot provide. Launch options are
@@ -30,7 +30,7 @@ import fsr4_games  # noqa: E402
 import fsr4_gpu  # noqa: E402
 import fsr4_install  # noqa: E402
 
-REPOSITORY = "Rayekkk/FSR4Injector"
+REPOSITORY = "XenoSlug/FSR4Injector-Deck"
 SHIM_PATH = os.path.join(PLUGIN_DIR, "bin", fsr4_install.SHIM)
 try:
     with open(os.path.join(PLUGIN_DIR, "plugin.json"), encoding="utf-8") as _f:

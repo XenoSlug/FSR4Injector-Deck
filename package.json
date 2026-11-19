@@ -1,7 +1,7 @@
 {
   "name": "fsr4injector",
   "version": "1.2.1",
-  "description": "DeckyLoader plugin: official AMD FSR 4.1 Lite for RDNA 3.5 APUs under Proton",
+  "description": "DeckyLoader plugin: official AMD FSR 4.1.2 Lite for Steam Deck (Van Gogh) under Proton",
   "license": "BSD-3-Clause",
   "type": "module",
   "scripts": {

@@ -27,9 +27,10 @@ class Model(unittest.TestCase):
         for (family, rev), model in cases.items():
             self.assertEqual(G.expected_model(family, rev), model, (family, rev))
 
-    def test_only_strix_point_is_verified(self):
+    def test_steam_deck_and_strix_point_are_verified(self):
         self.assertTrue(G.is_verified(150, 20))
-        self.assertFalse(G.is_verified(144, 1))
+        self.assertTrue(G.is_verified(144, 1))
+        self.assertTrue(G.is_verified(144, 3))
         self.assertFalse(G.is_verified(150, 0xC1))
 
 
@@ -52,19 +53,19 @@ class Detect(unittest.TestCase):
         self.node("renderD128", 0x10DE, 0x2684)  # an NVIDIA card first is skipped
         self.node("renderD129", 0x1002, 0x163F)
         gpu = G.detect(self.dri, self.sys, query=lambda path: (0x163F, 144, 1))
-        self.assertEqual(gpu, {"device": 0x163F, "family": 144, "rev": 1, "arch": "RDNA 2 APU (Van Gogh)",
-                               "model": "INT8_LITE", "model_name": "INT8 Lite", "verified": False})
+        self.assertEqual(gpu, {"device": 0x163F, "family": 144, "rev": 1, "arch": "Steam Deck (Van Gogh)",
+                               "model": "INT8_LITE", "model_name": "INT8 Lite", "verified": True})
 
     def test_known_gpu_when_the_kernel_query_fails(self):
-        self.node("renderD128", 0x1002, 0x150E)
+        self.node("renderD128", 0x1002, 0x163F)  # Steam Deck LCD
 
         def broken(path):
             raise OSError("ioctl not permitted")
         gpu = G.detect(self.dri, self.sys, query=broken)
-        self.assertEqual((gpu["family"], gpu["rev"], gpu["model"], gpu["verified"]), (150, 20, "INT8_LITE", True))
+        self.assertEqual((gpu["family"], gpu["rev"], gpu["model"], gpu["verified"]), (144, 3, "INT8_LITE", True))
 
     def test_unknown_gpu_when_the_kernel_query_fails(self):
-        self.node("renderD128", 0x1002, 0x163F)
+        self.node("renderD128", 0x1002, 0x744C)  # unmapped GPU
         self.assertIsNone(G.detect(self.dri, self.sys, query=lambda path: (_ for _ in ()).throw(OSError())))
 
     def test_no_amd_gpu(self):

@@ -76,7 +76,9 @@ int main(int argc, char **argv)
     /* written as UTF-8 whatever code page Wine uses for the system language */
     CHECK(json && strstr(json, "\"compat_tool\":\"/home/deck/Proton \\\"11\\\"\\\\x \xc5\xbb\xc3\xb3\xc5\x82w\""));
 
-    /* GPU table: only verified RDNA 3.5 parts get an answer */
+    /* GPU table: only verified parts get an answer */
+    CHECK(fsr4i_lookup_family(0x1002, 0x163f, &family, &rev) && family == 144 && rev == 3);
+    CHECK(fsr4i_lookup_family(0x1002, 0x1435, &family, &rev) && family == 144 && rev == 3);
     CHECK(fsr4i_lookup_family(0x1002, 0x150e, &family, &rev) && family == 150 && rev == 20);
     CHECK(!fsr4i_lookup_family(0x1002, 0x744c, &family, &rev)); /* RDNA3 dGPU: real driver data not ours to invent */
     CHECK(!fsr4i_lookup_family(0x10de, 0x150e, &family, &rev));

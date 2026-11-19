@@ -28,9 +28,10 @@ typedef unsigned char (*is_supported_fn)(void *provider, void *device);
 typedef struct { UINT hAdapter; UINT Type; void *pPrivateDriverData; UINT PrivateDriverDataSize; } QUERYADAPTERINFO;
 
 /* Fallback when the plugin's fsr4injector.gpu is missing: real values as RADV_DEBUG=info reports them (family_id,
- * chip_external_rev). Lite needs family 150 (AMDGPU_FAMILY_GC_11_5_0) with revision 1..0x3F; family 150 with
- * 0xC0..0xCF gets the full INT8 model instead. */
+ * chip_external_rev). Lite model needs family 144 (Van Gogh: 1..0x7F) or family 150 (Strix Point: 1..0x3F). */
 static const struct { USHORT device; UINT family, rev; } gpus[] = {
+    { 0x163f, 144, 3 },  /* Steam Deck LCD (Aerith / Van Gogh): family 144, chip_external_rev 3 */
+    { 0x1435, 144, 3 },  /* Steam Deck OLED (Sephiroth / Van Gogh): family 144, chip_external_rev 3 */
     { 0x150e, 150, 20 }, /* Strix Point, Legion Go 2: family_id 150, chip_external_rev 20 */
 };
 
@@ -481,7 +482,7 @@ void fsr4i_on_ffx_request(LUID luid)
         st.vendor = vendor;
         st.device = device;
         st.have_family = fsr4i_lookup_family(st.vendor, st.device, &st.family, &st.rev);
-        if (!st.have_family) fsr4i_log("GPU %04x:%04x is not in the RDNA 3.5 table; FSR4 stays off", st.vendor, st.device);
+        if (!st.have_family) fsr4i_log("GPU %04x:%04x is not in the supported GPU table; FSR4 stays off", st.vendor, st.device);
         st.ffx_requested = TRUE;
         write_status_locked();
     }

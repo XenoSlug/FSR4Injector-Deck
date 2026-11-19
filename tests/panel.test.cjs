@@ -363,7 +363,7 @@ test('About is the last row; its page has the plugin facts and updates at the bo
   about.props.onActivate();
   tree = h.render();
   assert.match(text(tree), /Version 1\.0\.0 \| AMD's official FSR 4 upscaler/);
-  assert.ok(findText(find(tree, 'Field', 'Author'), 'Rayek · BSD-3-Clause · github.com/Rayekkk/FSR4Injector'));
+  assert.ok(findText(find(tree, 'Field', 'Author'), 'Rayek · BSD-3-Clause · github.com/XenoSlug/FSR4Injector-Deck'));
   assert.ok(!toggleOf(tree, 'Spider-Man'), 'the games stay on the main page');
   assert.deepEqual(all(tree).filter(n => n.type === 'PanelSection').map(n => n.props.title), ['About', 'FSR4 Injector', "Rayek's store", 'Updates']);
   assert.match(text(tree), /Installed version 1\.0\.0 \| Check for updates when you need them\./);
