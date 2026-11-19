@@ -5,7 +5,7 @@
 Import it first in every backend test: `import _harness  # noqa: F401`.
 
 Sources: DeckyLS/FSR4Injector/DeckyReshade/DeckyVibranceHDR tests/_harness.py (module stand-in, temp folders),
-Ayaneo3Companion tests/_harness.py and LegionGo2Companion tests/support.py (DECKY_PLUGIN_DIR, emit, a hung run
+DeckyKit tests/support.py (DECKY_PLUGIN_DIR, emit, a hung run
 dumps every thread's stack).
 Guarantees: tests never touch the real home, settings or runtime folders (all under one fresh temp folder);
 decky.logger is a real logging.Logger (assertLogs works) that prints nothing; decky.emit records events in

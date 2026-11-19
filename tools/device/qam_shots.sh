@@ -1,6 +1,6 @@
 #!/bin/bash
 # qam_shots.sh <out dir>: README screenshots of the FSR4 Injector panel in the Quick Access Menu, one per section,
-# clipped to the menu like the Companion plugins' (375 × 695 CSS px, 577 × 1070 on the Legion Go 2).
+# clipped to the menu (375 × 695 CSS px on the Steam Deck).
 set -eu
 out=$1; mkdir -p "$out"
 D=$(dirname "$0")

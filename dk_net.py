@@ -3,13 +3,13 @@
 
 """HTTPS downloads a plugin can trust: verified, bounded in size and time, pinned by hash when it matters.
 
-Sources: LegionGo2Companion/bounded_http.py (isolated fetch process, HTTPS-only URLs, host allow-list on every
+Sources: DeckyKit/bounded_http.py (isolated fetch process, HTTPS-only URLs, host allow-list on every
 redirect, wall-clock deadline, cancel, OS trust store first, anchors handed to the child), DeckyReshade/
 reshade_net.py (download through .part + rename, cut-short bodies, IncompleteRead, a full disk reported as a
 download error, the body kept on the destination's disk), DeckyLS/lsfg_install.py (pinned SHA-256 of the content),
 FSR4Injector/fsr4_dll.py (one part of a large file by an HTTP range, checked against Content-Range; progress; the
 body handed over for decoding instead of kept; a deadline long enough for 45 MB on a slow link),
-Ayaneo3Companion/lego_updater.py (no fragments; redirects narrower than the first URL's hosts).
+DeckyKit/updater.py (no fragments; redirects narrower than the first URL's hosts).
 The status of an HTTP refusal (NetError.status) is for the shared updater (404: no release yet).
 
 Guarantees:
@@ -41,7 +41,7 @@ Guarantees:
   (a full disk, a fetch process that cannot start) without its path (dk_fs.shown); the caller says what it fetched.
 
 Deliberately not here: retries (the user presses again), GitHub release parsing and per-request redirect
-policies such as Legion's metadata/archive (the shared updater passes `hosts` and `redirects`), proxies, cookies,
+policies (the shared updater passes `hosts` and `redirects`), proxies, cookies,
 HTTP auth.
 """
 

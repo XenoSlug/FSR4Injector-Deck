@@ -9,7 +9,7 @@ import unittest
 import _harness  # noqa: F401
 import dk_rpc
 
-# Its own logger: a plugin may filter decky.logger (Ayaneo3Companion strips tracebacks of paths), which is not
+# Its own logger: a plugin may filter decky.logger, which is not
 # what these tests are about.
 LOG = logging.getLogger("dk_rpc-test")
 LOG.addHandler(logging.NullHandler())
@@ -73,11 +73,11 @@ class RpcTest(unittest.TestCase):
         class Plugin:
             @rpc
             async def write(self, kind):
-                raise RuntimeError("This device is not an AYANEO 3") if kind == "refusal" else KeyError("k")
+                raise RuntimeError("Unsupported device") if kind == "refusal" else KeyError("k")
 
         with self.assertLogs(LOG, "WARNING") as logs:
             result = asyncio.run(Plugin().write("refusal"))
-        self.assertEqual(result, {"ok": False, "error": "This device is not an AYANEO 3"})
+        self.assertEqual(result, {"ok": False, "error": "Unsupported device"})
         self.assertEqual(len(logs.records), 1)
         self.assertEqual(logs.records[0].levelname, "WARNING")
         self.assertIsNone(logs.records[0].exc_info, "a refusal is not a bug: no traceback")

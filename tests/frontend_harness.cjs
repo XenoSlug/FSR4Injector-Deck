@@ -2,8 +2,8 @@
 // Shared from DeckyKit (shared/tests/frontend_harness.cjs): change it there, then `kit sync`.
 // Runs the real TSX in a Node `vm` with controlled hooks, RPC calls, toasts, timers and clock: no React, no jest.
 //
-// Sources: DeckyLS/FSR4Injector tests/frontend_panel.cjs (vm + transpile, manual RPC answers, keep), LegionGo2Companion
-// tests/frontend_harness.cjs (useRef/useMemo, toaster, fake clock, auto answers, strict RPCs, module stubs, props,
+// Sources: DeckyKit frontend test harness
+// (useRef/useMemo, toaster, fake clock, auto answers, strict RPCs, module stubs, props,
 // useQuickAccessVisible, Decky events, window, Object.is dependencies, build-time constants), DeckyReshade
 // tests/frontend_panel.cjs (hook state per component and key, elements inside descriptions, localStorage,
 // CustomEvent and recorded window events), FSR4Injector tests/frontend_panel.cjs (the entry's default export, so
@@ -21,8 +21,8 @@
 // window.dispatchEvent is recorded in `events`; `exports` are the entry's exports (`exports.default()` runs what
 // definePlugin was given) and `window` is the sandbox's window, so a test can change it between renders;
 // `writes` counts state setter calls (a late answer to an unmounted or hidden panel must write nothing,
-// Ayaneo3Companion); `timers`/`intervals` list every timeout/interval set ({ms, done}), and `tick(ms)` runs only
-// the intervals of that period (a page with several pollers, Ayaneo3Companion).
+// `timers`/`intervals` list every timeout/interval set ({ms, done}), and `tick(ms)` runs only
+// the intervals of that period.
 // Deliberately not here: real React rendering (DeckyEQ keeps vitest), unmounting a component that leaves the tree
 // (its effects clean up on unmount()/remount()), DOM.
 //
@@ -139,7 +139,7 @@ function harness({ entry = 'src/index.tsx', component = 'Content', ui = {}, glob
       if (name === 'react/jsx-runtime') return jsx;
       if (name in modules) return modules[name];
       if (name === '@decky/api') return { callable, definePlugin: fn => fn, toaster: { toast: t => toasts.push(copy(t)) },
-        useQuickAccessVisible: () => visible,  // @decky/api exports it too (Ayaneo3Companion imports it from there)
+        useQuickAccessVisible: () => visible,  // @decky/api exports it too
         addEventListener: (event, fn) => { listeners.set(event, [...(listeners.get(event) ?? []), fn]); return fn; },
         removeEventListener: (event, fn) => listeners.set(event, (listeners.get(event) ?? []).filter(f => f !== fn)),
         ...api };

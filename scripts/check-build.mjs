@@ -2,7 +2,7 @@
 // Shared from DeckyKit (shared/build/check-build.mjs): change it there, then `kit sync`.
 //
 // Checks the generated dist/index.js the way Steam's CEF will load it. Sources: DeckyLS/FSR4Injector/DeckyReshade
-// (parse, externals, globals, export, source map), LegionGo2Companion/Ayaneo3Companion (no unreplaced
+// (parse, externals, globals, export, source map), DeckyKit (no unreplaced
 // __PLUGIN_VERSION__), DeckyVibranceHDR verify_package.py and tests/panel-harness.mjs (decky:// sources, source
 // map not older than src/, every src file and @decky/api in the map, the bundle loaded against a fake Decky host).
 // Guarantees: the bundle parses as JavaScript and has no import left at all (React, ReactDOM, @decky/ui and

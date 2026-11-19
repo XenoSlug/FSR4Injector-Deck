@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 // Shared from DeckyKit (shared/frontend/result.ts): change it there, then `kit sync`.
 //
-// Sources: DeckyLS (Result<T>, settle), LegionGo2Companion/Ayaneo3Companion src/shared.tsx (errorText with a
+// Sources: DeckyLS (Result<T>, settle), DeckyKit (errorText with a
 // fallback for anything without a message, toasts that can never throw), DeckyEQ src/types.ts (Result shape with a
 // success message).
 // Guarantees: a call wrapped in settle() never rejects and keeps the call's own answer type (extra fields such as

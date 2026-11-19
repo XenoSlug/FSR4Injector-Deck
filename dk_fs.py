@@ -3,13 +3,11 @@
 
 """Files that must never be left half-written, read without trusting what is on disk.
 
-Sources: LegionGo2Companion/safe_settings.py and Ayaneo3Companion/safe_settings.py (symlink refusal, dir_fd,
+Sources: DeckyKit/safe_settings.py (symlink refusal, dir_fd,
 O_NOFOLLOW, owner, quarantine, backup of the current content, backup on first read, object root, limits, duplicate
 keys, open_directory, private copies and a store made private on read, lost intent when only a damaged copy is
-left, writes killed at every step; Legion: a symlinked folder refused for reads too, an unsafe last-good copy
-reported instead of silently never refreshed, an empty file that is lost intent, a private existing copy), DeckyVibranceHDR/vibrance_settings.py (kept file mode, orphaned temp files, folder fsync
-never fails a write, symlinked settings of a user plugin, Decky's empty first file), DeckyEQ/deckyeq/storage.py
-(last-good fallback, validation hook, private folder), DeckyLS (first version), DeckyReshade (sha256_file for
+left, writes killed at every step; a symlinked folder refused for reads too, an unsafe last-good copy
+reported instead of silently never refreshed, an empty file that is lost intent, a private existing copy), DeckyReshade (sha256_file for
 files too big to hold whole; writing into a folder the caller opened, for the shared updater's walk to Downloads).
 
 Guarantees:
@@ -28,7 +26,7 @@ Guarantees:
   writes user files as the user; owner=(uid, gid) sets the new file's owner whatever was there (a root-owned file
   of the same name in the user's Downloads does not stay root's). Folders are created with the umask (folder_mode to override; JSON stores 0o700).
 - Once the new file is in place, a failed folder fsync is not a failed write (strict_sync=True makes it one);
-  write_atomic answers False then (True otherwise), so a caller can log it (Legion's settings diagnostics).
+  write_atomic answers False then (True otherwise), so a caller can log it.
 - Temp files of a write killed mid-way (older than a minute) are removed by the next write of that file.
 - Reads take at most `limit` bytes. JSON is read strictly: UTF-8, no duplicate keys, no NaN/Infinity, bounded
   nesting, integers within Python's digit limit; `validate` may refuse content that parses. A JSON write refuses
@@ -61,8 +59,7 @@ Guarantees:
   UnsafePath keeps its own text) and logs the full error (DeckyLS, DeckyEQ, DeckyVibranceHDR did it locally).
 
 Deliberately not here: locking (callers serialise writes to one file), schemas (pass `validate`), Decky's
-SettingsManager API (Ayaneo3Companion's safe_settings.py is a thin layer on top, Legion's AtomicSettingsManager
-will be), logging (no `decky`).
+SettingsManager API, logging (no `decky`).
 """
 
 import contextlib

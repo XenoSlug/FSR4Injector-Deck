@@ -3,9 +3,9 @@
 //
 // Adapted from @decky/rollup 1.0.2, Copyright (c) 2024 Steam Deck Homebrew, BSD-3-Clause (its globals map).
 // Sources: DeckyLS/FSR4Injector (own config without @decky/rollup, which pulled in vulnerable glob dependencies;
-// decky:// source map paths on Windows too), Ayaneo3Companion/LegionGo2Companion (react-dom global, NODE_ENV and
+// decky:// source map paths on Windows too), DeckyKit (react-dom global, NODE_ENV and
 // __PLUGIN_VERSION__ replaced, commonjs/json, smallest tree-shaking with @decky side-effect free, guarded dist
-// clean-up that can keep a native build such as dist/desktop).
+// clean-up that can keep a native build).
 // Guarantees: React, ReactDOM and @decky/ui come from Steam's globals (SP_REACT, SP_JSX, SP_REACTDOM, DFL), never
 // bundled; @decky/manifest is plugin.json; an import that resolves to nothing fails the build instead of becoming a
 // silent external; process.env.NODE_ENV and __PLUGIN_VERSION__ are replaced (whole words, never an assignment

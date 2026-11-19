@@ -6,16 +6,14 @@
 
 Nothing is installed or run: the user installs the ZIP (Decky -> Developer -> Install Plugin from ZIP).
 
-Sources: LegionGo2Companion/companion_updates.py (stable X.Y.Z only, release and asset bound to the repository,
+Sources: DeckyKit/companion_updates.py (stable X.Y.Z only, release and asset bound to the repository,
 size and GitHub's digest, the ZIP read entry by entry with real sizes and CRCs, manifests, XDG Downloads walked by
 descriptor as root and created for the user, a verified file reused, check cache, a fresh check before the
 download, close() on unload), DeckyReshade/FSR4Injector *_updates.py (plugin-specific required files, messages
-for rate limits, connections and a changed release), DeckyVibranceHDR/lego_updater.py (a second download refused at
-once, logs without the user's paths), DeckyEQ/deckyeq/updates.py (a release asking for other plugin flags, e.g.
-root, refused; the asset's uploader; close() that never waits for a write in progress), Ayaneo3Companion/
-lego_updater.py (redirects of the ZIP only to the asset hosts, the missing required file named),
-LegionGo2Companion again (home bound to the console user's uid, .config read without following a link, the
-saved ZIP always the user's, diagnostics of each check and download with the stage that failed).
+for rate limits, connections and a changed release), DeckyEQ/updates.py (a release asking for other plugin flags, e.g.
+root, refused; the asset's uploader; close() that never waits for a write in progress), DeckyKit again
+(redirects of the ZIP only to the asset hosts, the missing required file named, home bound to the console user's uid,
+.config read without following a link, the saved ZIP always the user's, diagnostics of each check and download).
 
 Guarantees:
 - Only a published stable release (not a draft or prerelease) tagged X.Y.Z or vX.Y.Z (parts of at most 6 digits)

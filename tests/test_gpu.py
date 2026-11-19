@@ -14,7 +14,7 @@ import fsr4_gpu as G
 class Model(unittest.TestCase):
     def test_amd_dll_rules(self):
         cases = {
-            (150, 20): "INT8_LITE",    # RDNA 3.5 APU
+            (150, 20): "INT8_LITE",
             (150, 0xC1): "INT8",
             (144, 1): "INT8_LITE",     # Steam Deck (Van Gogh)
             (143, 0x28): "INT8_NAVI2", # RX 6800

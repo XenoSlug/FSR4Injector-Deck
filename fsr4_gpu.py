@@ -16,8 +16,8 @@ import struct
 DRM_IOCTL_AMDGPU_INFO = (1 << 30) | (32 << 16) | (ord("d") << 8) | (0x40 + 0x05)
 AMDGPU_INFO_DEV_INFO = 0x16
 
-# Families (AMDGPU_FAMILY_*): 143 NV (RDNA1/2), 144 VGH (Van Gogh), 145 GC 11.0 (RDNA3), 150 GC 11.5 (RDNA 3.5),
-# 152 GC 12 (RDNA4).
+# Families (AMDGPU_FAMILY_*): 143 NV, 144 VGH (Steam Deck Van Gogh), 145 GC 11, 150 GC 11.5,
+# 152 GC 12.
 MODELS = {"FP8": "FP8", "INT8": "INT8", "INT8_NAVI2": "INT8 (RDNA2)", "INT8_LITE": "INT8 Lite"}
 ARCH = {144: "Steam Deck (Van Gogh)"}
 # (family, revision range) combinations checked on real hardware.

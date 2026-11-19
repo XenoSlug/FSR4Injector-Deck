@@ -347,7 +347,7 @@ static void record_model(size_t i, void *device, unsigned char supported)
 #define FP8_FAMILY 152 /* AMDGPU_FAMILY_GC_12_0_0, RDNA4: the only family with native FP8 WMMA */
 
 /* Another tool's IAmdExtD3DDevice8 (OptiScaler's) claims FP8 WMMA on any GPU; FFX then picks the FP8 model and the
- * game dies on RDNA 3.5. Our own Device8 only claims what vkd3d reports, so this only overrides such lies. */
+ * game crashes without native FP8. Our own Device8 only claims what vkd3d reports, so this only overrides such lies. */
 unsigned char fsr4i_model_allowed(size_t i, unsigned char supported)
 {
     const char *e = getenv("DXIL_SPIRV_CONFIG");

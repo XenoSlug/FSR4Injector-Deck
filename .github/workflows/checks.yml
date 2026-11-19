@@ -1,17 +1,15 @@
 # Shared from DeckyKit (shared/ci/checks.yml): change it there, then `kit sync`. A plugin's own extra jobs go in
 # a separate workflow file next to this one.
 # Sources: DeckyLS/FSR4Injector checks.yml (pinned actions, read-only token, matrix, -W error), DeckyVibranceHDR
-# (compileall, tag gate, Python 3.10), LegionGo2Companion/Ayaneo3Companion (independent read-back
-# of the ZIP, the plugin's own ZIP check), LegionGo2Companion/Ayaneo3Companion/DeckyEQ (ZIP + .sha256 kept).
+# (compileall, tag gate, Python 3.10), DeckyKit (independent read-back
+# of the ZIP, the plugin's own ZIP check, ZIP + .sha256 kept).
 # Guarantees: every action pinned by commit SHA; the token can only read; no credentials kept in the checkout;
 # every backend module compiles without warnings and the tests pass with warnings as errors on each Python version
 # the plugin supports (package.json "decky.python", default 3.14) and on Windows; locked dependencies
 # installed without their install scripts (esbuild's binary rebuilt where Vitest needs it: DeckyEQ); an advisory of
 # moderate severity or above fails; the ZIP is built and checked by
 # scripts/package.mjs (tag = version on tag builds), read back by Python's zipfile (what Decky installs with), checked
-# by the plugin's scripts/verify-package.py when there is one, and kept as a build artifact. A plugin with native
-# code the package needs (LegionGo2Companion's Qt Desktop app in dist/desktop) builds and tests it in its own
-# scripts/ci-native.sh, run before the frontend build; the job then allows 30 minutes.
+# by the plugin's scripts/verify-package.py when there is one, and kept as a build artifact.
 # Deliberately not here: publishing releases (made by hand after testing on hardware), plugin-specific jobs.
 name: Quality checks
 

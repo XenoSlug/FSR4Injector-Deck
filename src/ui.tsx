@@ -1,13 +1,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 // Shared from DeckyKit (shared/frontend/ui.tsx): change it there, then `kit sync`.
 //
-// Sources: LegionGo2Companion src/shared.tsx (infoRow, detailsRows with the repair actions above the facts,
-// statusPlaceholder with a spinner, confirmAction), LegionGo2Companion src/index.tsx and Ayaneo3Companion src/ui.tsx
-// (SectionLink with a status note, the page header's one focus handoff, icons that inherit Steam's focus color),
-// LegionGo2Companion src/tdp_api.tsx (toasts that never throw), DeckyEQ src/shared.tsx (ActionButton that fills the
-// row, bDestructiveWarning, a dismissed dialog that puts its control back, dialogs shown through the plugin's own
-// tracker), LegionGo2Companion src/index.tsx and DeckyReshade src/shared.tsx (PageShell: B goes back, names stay
-// inside the QAM's width), DeckyLS src/index.tsx (the faint warning surface), docs/UI.md §2–§6, §9–§10.
+// Shared UI components for DeckyLoader plugins on Steam Deck.
 // Guarantees: infoRow is focusable, so the D-pad reaches read-only rows; ActionButton fills its row; SectionLink shows
 // icon, title, a one-line summary (and a note under it) and a chevron, and takes the focus only when it mounts with
 // `focus`, never on a later render (a poll, the QAM opening again); PageHeader is the page's first row, `‹ <back>` in a

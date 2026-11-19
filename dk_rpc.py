@@ -16,13 +16,13 @@ and no exception ever reaches the frontend.
         async def get_state(self): return dk_rpc.ok(state)
 
 Sources: FSR4Injector/DeckyReshade main.py (every RPC waits for _ready), DeckyEQ deckyeq/storage.py (errors shown
-to users name no path), DeckyLS (first version of the contract), Ayaneo3Companion quality_runtime.py (refusals
+to users name no path), DeckyLS (first version of the contract), DeckyKit quality_runtime.py (refusals
 raised as exceptions whose text is for the user; a polled call that keeps failing logs once, not every few
 seconds); the other plugins had three different error shapes, which D2 replaces.
 Guarantees: a decorated method runs only after `ready` is set, and answers fail() instead of hanging when it is not
 set within `wait` seconds; an unexpected exception is logged with its traceback and becomes fail() with a short
 message that carries only the exception's type (str(e) may hold a path, and so the user's name); an exception of
-a `shown` type (the plugin's own refusals, written for users: e.g. RuntimeError("This device is not an AYANEO 3"))
+a `shown` type (the plugin's own refusals, written for users: e.g. RuntimeError("Unsupported hardware"))
 or of the plugin's own subclass of one becomes fail(str(e)) and one warning line without a traceback, while
 Python's own subclasses (JSONDecodeError, UnicodeDecodeError, NotImplementedError...) stay unexpected errors; with
 `state` (a function of the plugin object, plain or async) a refusal carries the state as it is, so the panel shows

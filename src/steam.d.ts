@@ -2,7 +2,7 @@
 // Shared from DeckyKit (shared/frontend/steam.d.ts): change it there, then `kit sync`.
 //
 // Steam client globals the plugins use, typed instead of `any`. Sources: DeckyLS (appStore, URL),
-// FSR4Injector/DeckyReshade (Apps, GameSessions, store_category), LegionGo2Companion/Ayaneo3Companion (resume from
+// FSR4Injector/DeckyReshade (Apps, GameSessions, store_category), DeckyKit (resume from
 // suspend through SleepManager, unsubscribe as an object or a function). Guarantees: every member a plugin calls is
 // declared with its arguments; nothing is `any`. Members are optional where Steam builds lack them, so callers must
 // check. Also the build constant __PLUGIN_VERSION__ (rollup.config.js puts plugin.json's version in its place;
@@ -38,7 +38,7 @@ type SteamUnregister = { unregister(): void } | (() => void);
 interface SteamSleepManager {
   RegisterForNotifyResumeFromSuspend?(callback: () => void): SteamUnregister;
   RegisterForNotifyRequestSuspend?(callback: () => void): SteamUnregister;
-  /** Only used to recognise the module among webpack exports (LegionGo2Companion). */
+  /** Only used to recognise the module among webpack exports. */
   NotifyResumeFromSuspend?(...args: unknown[]): unknown;
 }
 

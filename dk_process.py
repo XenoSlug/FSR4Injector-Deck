@@ -3,7 +3,7 @@
 
 """The one way a plugin backend runs another program.
 
-Sources: LegionGo2Companion/system_process.py (system_env, run, run_helper; Ayaneo3Companion has an older copy),
+Sources: DeckyKit/system_process.py (system_env, run, run_helper),
 DeckyEQ/deckyeq/worker.py (parent-death signal for long-lived children), DeckyLS (UTF-8 locale and decoding),
 DeckyVibranceHDR vibrance_host.py/vibrance_lutfile.py (the host's native programs when Decky runs emulated, no full
 fork of a large emulated process, the helper's error output).
@@ -15,7 +15,7 @@ Guarantees:
 - run(): always a timeout (the child is killed and TimeoutExpired raised), stdin from /dev/null, never a shell
   (argv list only), LC_ALL=C.UTF-8 (English messages, UTF-8 names intact), output as str with undecodable bytes
   replaced (text=False or bytes input keep bytes, for callers moving from system_process.run), no console window
-  on Windows (a caller's own creationflags are kept, not a duplicate-argument TypeError). Everything else is subprocess.run's (Ayaneo3Companion relies on it): a non-zero exit is returned,
+  on Windows (a caller's own creationflags are kept, not a duplicate-argument TypeError). Everything else is subprocess.run's: a non-zero exit is returned,
   check=True raises CalledProcessError, a given env is used as it is, input/cwd/user/group reach the child.
 - run_helper(): `python -I` helper with a wall-clock deadline and a cancel flag; on either the child is killed and
   reaped, so no thread of Decky's executor waits on it (DNS lookups, slow scripts). The stop is reported at most
@@ -40,9 +40,9 @@ Guarantees:
 Deliberately not here: shell pipelines, sudo (the plugin already runs with the rights it has), killing by name, an
 asyncio run() (DeckyEQ keeps its own: bounded output, kill and drain on cancel), restoring LD_LIBRARY_PATH_ORIG
 (the user's own library path is not a system program's either), a bounded wait after killing a timed-out child
-(subprocess.run waits for it, so plugins' tests can patch subprocess.run; a program that can hang in the kernel,
-like Ayaneo3Companion's ryzenadj, keeps its own Popen with kill and a 2 s reap), detached children that must
-outlive the plugin (Ayaneo3Companion's fan guardian: start_new_session, its own Popen).
+(subprocess.run waits for it, so plugins' tests can patch subprocess.run; a program that can hang in the kernel
+keeps its own Popen with kill and reap), detached children that must
+outlive the plugin (start_new_session, its own Popen).
 """
 
 import functools

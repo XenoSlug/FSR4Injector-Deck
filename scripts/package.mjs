@@ -6,8 +6,8 @@
  * .sha256 (sha256sum format). `--check` runs every check without writing anything; `--release` also refuses
  * uncommitted changes in anything that ships or builds it (for a release ZIP built on the owner's machine).
  *
- * Sources: DeckyLS (one runtime list in package.json "decky", CHANGELOG/tag checks), LegionGo2Companion/
- * Ayaneo3Companion scripts/package.mjs (own ZIP writer, fixed folder, staging outside the repo, symlink refusal,
+ * Sources: DeckyKit package scripts
+ * (own ZIP writer, fixed folder, staging outside the repo, symlink refusal,
  * caches and nested tests left out, atomic publish, lockfile identity, unknown arguments refused) and
  * verify-package.py / lego_updater.py (read the finished ZIP back the way the updater does, byte-for-byte with the
  * sources, secret-like names), DeckyVibranceHDR verify_package.py and build.yml (@decky/api version = lockfile,
