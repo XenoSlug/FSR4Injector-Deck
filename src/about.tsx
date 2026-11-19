@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 // About and Updates page components for Steam Deck.
 import { PanelSection, PanelSectionRow } from "@decky/ui";
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { ActionButton, infoRow } from "./ui";
 
 /** dk_update's check answer (DeckyKit D2). */
