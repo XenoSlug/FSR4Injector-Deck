@@ -291,7 +291,8 @@ function main(args) {
   const released = sections.find(s => /^\d+\.\d+\.\d+$/.test(s));
   if (released !== version) fail(`version mismatch: plugin.json=${version}, newest CHANGELOG release=${released}`);
   if (process.env.GITHUB_REF_TYPE === "tag") {
-    if (process.env.GITHUB_REF_NAME !== version) fail(`version mismatch: tag=${process.env.GITHUB_REF_NAME} plugin.json=${version}`);
+    const cleanTag = (process.env.GITHUB_REF_NAME ?? "").replace(/^v/, "").replace(/-deck.*$/, "");
+    if (cleanTag !== version && process.env.GITHUB_REF_NAME !== version) fail(`version mismatch: tag=${process.env.GITHUB_REF_NAME} plugin.json=${version}`);
     if (sections[0] !== version) fail(`a tag build needs CHANGELOG's top section to be [${version}], not [${sections[0]}]`);
   }
   if (!existsSync(join(repoRoot, "dist", "index.js"))) fail("dist/index.js is missing - run `npm run build` first");
