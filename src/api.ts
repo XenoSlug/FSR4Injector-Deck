@@ -8,7 +8,7 @@ import { UpdateCheck, UpdateDownload } from "./about";
 import { Result, settle } from "./result";
 
 export type BackendKind = "cyboman" | "native";
-export type VariantId = "off" | "4.1.2l-exact" | "4.1.2l-lossy" | "exact" | "lossy" | "official-lite";
+export type VariantId = "off" | "4.1.2l-exact" | "4.1.2l-lossy" | "official-lite";
 
 export interface Game {
   appid: number;

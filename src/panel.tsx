@@ -335,7 +335,7 @@ export const Content: FC = () => {
 
   const gameOptions = (g: Game) => {
     const opts = [{ data: "off" as VariantId, label: VARIANT_BY_ID.off.label }];
-    const includeCybo = (g.cyboman_eligible && canCyboman) || isCybomanVariant(g.variant);
+    const includeCybo = (g.cyboman_eligible && canCyboman) || g.backend === "cyboman" || isCybomanVariant(g.variant);
     if (includeCybo) {
       for (const v of VARIANTS) {
         if (v.cyboman) opts.push({ data: v.id, label: v.label });
@@ -449,7 +449,7 @@ export const Content: FC = () => {
             <PanelSectionRow>
               <Field
                 label={`Cyboman RDNA 2 (${cybo.tag || "cached"})`}
-                description={`4 variants cached (${cybo.extracted_from === "7z" ? ".7z" : ".zip"})${cybo.update_available ? ` · ${cybo.latest_tag} available` : ""}`}
+                description={`2 Lite variants cached (${cybo.extracted_from === "7z" ? ".7z" : ".zip"})${cybo.update_available ? ` · ${cybo.latest_tag} available` : ""}`}
               >
                 Ready
               </Field>
@@ -552,7 +552,7 @@ export const Content: FC = () => {
         {canEnableAny && state.games.some(g => !g.enabled && !g.anticheat) && (
           <PanelSectionRow>
             <ActionButton disabled={busy !== null} onClick={() => applyAll(true)}
-              description="Sets up eligible offline games (4.1.2l-exact for OptiScaler 4.1.1.2740, else Official AMD Lite). Online and anti-cheat games are skipped.">
+              description="Sets up eligible offline games (4.1.2 Lite — Exact for OptiScaler 4.1.1.2740, else Official AMD Lite). Online and anti-cheat games are skipped.">
               {bulk?.kind === "on" ? `Turning on… ${bulk.text}` : "Turn on FSR4 in offline games"}
             </ActionButton>
           </PanelSectionRow>

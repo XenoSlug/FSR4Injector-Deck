@@ -38,30 +38,17 @@ export interface VariantMeta {
 }
 
 export const VARIANTS: VariantMeta[] = [
-  { id: "off", label: "Off (Original)", summary: "Restore original game files and launch options." },
+  { id: "off", label: "Off", summary: "Restore original game files and launch options." },
   {
     id: "4.1.2l-exact",
-    label: "4.1.2l-exact (Recommended)",
+    label: "4.1.2 Lite — Exact (Recommended)",
     summary: "FSR 4.1.2 Lite, bit-exact to AMD Lite (~11–16% faster on RDNA 2).",
     cyboman: true,
   },
   {
     id: "4.1.2l-lossy",
-    label: "4.1.2l-lossy",
+    label: "4.1.2 Lite — Lossy",
     summary: "FSR 4.1.2 Lite, alternating-frame neural pass (~13–22% faster, ~2.1 ms @ 800p).",
-    lossy: true,
-    cyboman: true,
-  },
-  {
-    id: "exact",
-    label: "exact",
-    summary: "Full FSR 4.1.2 (RDNA 2 model), bit-exact to AMD.",
-    cyboman: true,
-  },
-  {
-    id: "lossy",
-    label: "lossy",
-    summary: "Full FSR 4.1.2, alternating-frame neural pass.",
     lossy: true,
     cyboman: true,
   },
@@ -74,9 +61,8 @@ export const VARIANTS: VariantMeta[] = [
 
 export const VARIANT_BY_ID = Object.fromEntries(VARIANTS.map(v => [v.id, v])) as Record<VariantId, VariantMeta>;
 
-export const isLossyVariant = (v?: VariantId) => v === "4.1.2l-lossy" || v === "lossy";
-export const isCybomanVariant = (v?: VariantId) =>
-  v === "4.1.2l-exact" || v === "4.1.2l-lossy" || v === "exact" || v === "lossy";
+export const isLossyVariant = (v?: VariantId) => v === "4.1.2l-lossy";
+export const isCybomanVariant = (v?: VariantId) => v === "4.1.2l-exact" || v === "4.1.2l-lossy";
 
 export const MB = (b: number) => `${(b / 2 ** 20).toFixed(0)} MB`;
 
@@ -89,8 +75,8 @@ export const CYBOMAN_ONLINE_WARNING =
   "(skipped by bulk actions).";
 
 export const LOSSY_TRADEOFF_WARNING =
-  "Alternating-frame neural pass: runs the FSR 4 network every other frame and reprojects motion in between. " +
-  "May introduce uneven frame pacing or minor speckling / exposure lag.";
+  "4.1.2 Lite — Lossy: runs the neural pass on alternating frames and reprojects motion in between " +
+  "(~2.1 ms @ 800p). May introduce uneven frame pacing or minor speckling / exposure lag.";
 
 export const RADV_CSWAVE32_WARNING =
   "RADV_PERFTEST=cswave32 detected: adds ~1.1 ms FSR 4 overhead on SteamOS RADV. Remove cswave32 from launch options.";

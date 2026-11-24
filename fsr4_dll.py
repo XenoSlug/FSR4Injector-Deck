@@ -13,7 +13,8 @@ one streaming pass, and only the verified DLL is kept (published by dk_fs).
 Cyboman RDNA 2 Overrides path (zgauthier2000/fsr4-shader-performance-overrides):
 Fetches the latest GitHub Release metadata, selects the Steam Deck / RDNA 2 iGPU archive (.7z when 7zz/7z/bsdtar
 is available, otherwise falling back to .zip via Python's built-in zipfile, including automatic runtime fallback if
-.7z extraction fails), verifies archive and per-DLL SHA-256 checksums, and caches all four variants locally.
+.7z extraction fails), extracts only the Steam Deck Lite variants (4.1.2l-exact, 4.1.2l-lossy), verifies archive
+and per-DLL SHA-256 checksums, and caches them locally.
 """
 
 import hashlib
@@ -239,7 +240,8 @@ CYBOMAN_RELEASE_BASE = f"https://github.com/{CYBOMAN_REPO}/releases"
 CYBOMAN_API_HOSTS = frozenset({"api.github.com"})
 CYBOMAN_ASSET_HOSTS = frozenset({"github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com"})
 CYBOMAN_REDIRECT_HOSTS = CYBOMAN_ASSET_HOSTS - {"github.com"}
-CYBOMAN_VARIANTS = ("4.1.2l-exact", "4.1.2l-lossy", "exact", "lossy")
+CYBOMAN_VARIANTS = ("4.1.2l-exact", "4.1.2l-lossy")
+CYBOMAN_PRUNED_VARIANTS = ("exact", "lossy")
 CYBOMAN_DEFAULT_VARIANT = "4.1.2l-exact"
 CYBOMAN_DLL_NAME = "amd_fidelityfx_upscaler_dx12.dll"
 CYBOMAN_EXPECTED_PE_VERSION = "4.1.1.2740"
@@ -448,8 +450,23 @@ def _safe_regular_in_stage(stage, rel_path):
     return target, st.st_size, sha256_file(target)
 
 
+def _prune_stale_cyboman_variants(cache_dir):
+    """Remove stale full-desktop variant directories (exact/, lossy/) from cache_dir without following symlinks."""
+    for stale in CYBOMAN_PRUNED_VARIANTS:
+        stale_path = os.path.join(cache_dir, stale)
+        try:
+            if os.path.islink(stale_path):
+                os.unlink(stale_path)
+            elif os.path.isdir(stale_path):
+                shutil.rmtree(stale_path, ignore_errors=True)
+            elif os.path.lexists(stale_path):
+                os.remove(stale_path)
+        except OSError:
+            pass
+
+
 def _publish_staged_variants(cache_dir, staged, tag, extracted_from, asset_name, asset_sha256):
-    """Atomically publish all verified variant DLLs and meta.json into cache_dir."""
+    """Atomically publish verified Lite variant DLLs and meta.json into cache_dir, pruning stale desktop dirs."""
     variants_meta = {}
     for variant in CYBOMAN_VARIANTS:
         src_path, size, digest = staged[variant]
@@ -469,11 +486,12 @@ def _publish_staged_variants(cache_dir, staged, tag, extracted_from, asset_name,
         "variants": variants_meta,
     }
     dk_fs.write_json(os.path.join(cache_dir, CYBOMAN_META), meta)
+    _prune_stale_cyboman_variants(cache_dir)
     return meta
 
 
 def _extract_zip_variants(archive_file, cache_dir, sums, tag, asset_name, asset_sha256, cancelled=None):
-    """Safely extract and verify all 4 Cyboman variants from a ZipFile-readable binary file."""
+    """Safely extract and verify the Cyboman Lite variants from a ZipFile-readable binary file."""
     try:
         with zipfile.ZipFile(archive_file) as zf:
             members = zf.infolist()
@@ -538,7 +556,7 @@ def _extract_zip_variants(archive_file, cache_dir, sums, tag, asset_name, asset_
 
 def _extract_7z_variants(archive_path, extractor, cache_dir, sums, tag, asset_name, asset_sha256,
                          cancelled=None, run=dk_process.run):
-    """Safely inspect, extract, and verify all 4 Cyboman variants from a .7z archive."""
+    """Safely inspect, extract, and verify the Cyboman Lite variants from a .7z archive."""
     kind, bin_path = extractor
     if cancelled and cancelled():
         raise FetchError("cancelled")
@@ -626,7 +644,7 @@ def cyboman_status(cache_dir):
         "ready": True,
         "tag": tag,
         "extracted_from": meta.get("extracted_from") if isinstance(meta.get("extracted_from"), str) else "",
-        "variants": variants,
+        "variants": {variant: variants[variant] for variant in CYBOMAN_VARIANTS},
     }
 
 
@@ -644,7 +662,7 @@ def _resolve_archive_sha256(asset, sums):
 
 def fetch_cyboman(cache_dir, release=None, progress=None, cancelled=None, *, on_stage=None,
                   get=dk_net.get, spool=dk_net.spool, which=shutil.which, run=dk_process.run):
-    """Download, verify, and cache all 4 Cyboman RDNA 2 variants into cache_dir.
+    """Download, verify, and cache the Cyboman RDNA 2 Lite variants into cache_dir.
 
     Uses the smaller .7z asset when 7zz/7z/bsdtar is available, and automatically falls back to the .zip asset
     if no 7z extractor is present or if .7z extraction fails at runtime.

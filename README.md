@@ -21,11 +21,10 @@ Switch per game between **`zgauthier2000/fsr4-shader-performance-overrides`** (C
 
 1. **Cyboman RDNA 2 Overrides (Primary for Steam Deck — OptiScaler / FSR 4.1.1):**
    - Fetches `fsr4.1.2-igpu-cyboman-rdna2-*` from GitHub Releases (`zgauthier2000/fsr4-shader-performance-overrides`), using `.7z` (~9 MB) when `7zz`/`7z`/`bsdtar` is present and automatically falling back to `.zip` (~100 MB) via Python `zipfile`.
-   - Exposes all four RDNA 2 iGPU variants for `amd_fidelityfx_upscaler_dx12.dll`:
-     - **`4.1.2l-exact` *(Recommended)*:** FSR 4.1.2 Lite, bit-exact to AMD Lite (~11–16% faster on RDNA 2).
-     - **`4.1.2l-lossy`:** FSR 4.1.2 Lite with alternating-frame neural pass (~13–22% faster, ~2.1 ms @ 800p; trades some frame pacing & exposure/speckle accuracy).
-     - **`exact`:** Full FSR 4.1.2 (RDNA 2 model), bit-exact to AMD.
-     - **`lossy`:** Full FSR 4.1.2 with alternating-frame neural pass.
+   - Extracts and caches only the two Steam Deck Lite RDNA 2 variants for `amd_fidelityfx_upscaler_dx12.dll` (saving ~50 MB of Deck storage):
+     - **`4.1.2 Lite — Exact` (`4.1.2l-exact`) *(Recommended)*:** FSR 4.1.2 Lite, bit-exact to AMD Lite (~11–16% faster on RDNA 2).
+     - **`4.1.2 Lite — Lossy` (`4.1.2l-lossy`):** FSR 4.1.2 Lite with alternating-frame neural pass (~13–22% faster, ~2.1 ms @ 800p; trades some frame pacing & exposure/speckle accuracy).
+   - *Full desktop FSR 4.1.2 (`exact` / `lossy`) is intentionally omitted on Steam Deck due to Van Gogh's 8-CU / 15W frame-time budget.*
    - Verifies PE `FileVersion` (`4.1.1.2740` expected), backs up the original DLL to `amd_fidelityfx_upscaler_dx12.dll.fsr4deck.orig` with SHA-256 tracking, and uses same-filesystem hard links to avoid wasting Deck SSD space.
 
 2. **Official AMD Lite (Baseline / Fallback — No OptiScaler Required):**
@@ -83,7 +82,7 @@ Switch per game between **`zgauthier2000/fsr4-shader-performance-overrides`** (C
 ## Credits & Upstream
 
 - [Rayekkk/FSR4Injector](https://github.com/Rayekkk/FSR4Injector) — Upstream Decky plugin architecture, LZMA2 streaming recipe, safety guarantees, and `amdxc64` shim.
-- [zgauthier2000/fsr4-shader-performance-overrides](https://github.com/zgauthier2000/fsr4-shader-performance-overrides) — Cyboman's RDNA 2 / Steam Deck shader performance override builds (`4.1.2l-exact`, `4.1.2l-lossy`, `exact`, `lossy`).
+- [zgauthier2000/fsr4-shader-performance-overrides](https://github.com/zgauthier2000/fsr4-shader-performance-overrides) — Cyboman's RDNA 2 / Steam Deck shader performance override builds (`4.1.2l-exact`, `4.1.2l-lossy`).
 - **Etaash Mathamsetty** & [GE-Proton](https://github.com/GloriousEggroll/proton-ge-custom) — Original `amdxc64` D3D12 extension implementation.
 - [vkd3d-proton](https://github.com/HansKristian-Work/vkd3d-proton) & [Decky Loader](https://github.com/SteamDeckHomebrew/decky-loader).
 

@@ -272,39 +272,56 @@ class CybomanFetch(unittest.TestCase):
         self.assertIsNone(fsr4_dll.available_7z_extractor(which=lambda _n: None))
 
     def test_zip_fallback_when_no_7z_extractor_and_cache_validation(self):
+        # Seed stale exact/ and lossy/ dirs from earlier versions to verify cache pruning
+        for stale in ("exact", "lossy"):
+            stale_dll = os.path.join(self.cache, stale, fsr4_dll.CYBOMAN_DLL_NAME)
+            os.makedirs(os.path.dirname(stale_dll), exist_ok=True)
+            with open(stale_dll, "wb") as f:
+                f.write(b"stale-" + stale.encode())
+
         urls = []
         rel = fsr4_dll.check_cyboman_release(get=self._fake_get(self._release_json()))
         meta = fsr4_dll.fetch_cyboman(
             self.cache, rel, get=self._fake_get(self._release_json()),
             spool=self._fake_spool(urls), which=lambda _n: None,
         )
+        self.assertEqual(fsr4_dll.CYBOMAN_VARIANTS, ("4.1.2l-exact", "4.1.2l-lossy"))
         self.assertTrue(urls[0].endswith(".zip"))
         self.assertEqual(meta["extracted_from"], "zip")
         status = fsr4_dll.cyboman_status(self.cache)
         self.assertTrue(status["ready"])
         self.assertEqual(status["tag"], self.tag)
-        for v, data in self.variants.items():
+        self.assertEqual(set(status["variants"]), {"4.1.2l-exact", "4.1.2l-lossy"})
+        for v in ("4.1.2l-exact", "4.1.2l-lossy"):
             with open(fsr4_dll.cyboman_variant_path(self.cache, v), "rb") as f:
-                self.assertEqual(f.read(), data)
+                self.assertEqual(f.read(), self.variants[v])
+        for skipped in ("exact", "lossy"):
+            self.assertFalse(os.path.lexists(os.path.join(self.cache, skipped)))
+            with self.assertRaises(ValueError):
+                fsr4_dll.cyboman_variant_path(self.cache, skipped)
         # Corrupting one cached variant invalidates status
-        with open(fsr4_dll.cyboman_variant_path(self.cache, "lossy"), "wb") as f:
+        with open(fsr4_dll.cyboman_variant_path(self.cache, "4.1.2l-lossy"), "wb") as f:
             f.write(b"corrupt")
         self.assertFalse(fsr4_dll.cyboman_status(self.cache)["ready"])
 
     def test_7z_extraction_and_runtime_fallback_to_zip_on_7z_error(self):
-        # 1) Working 7z extractor path
+        # 1) Working 7z extractor path (archive lists all 4; only the 2 Lite variants are requested/extracted)
+        requested_7z = []
+
         def ok_run(argv, timeout, **kw):
             if argv[1] == "l":
                 lines = ["----------"]
-                for v in fsr4_dll.CYBOMAN_VARIANTS:
+                for v in ("4.1.2l-exact", "4.1.2l-lossy", "exact", "lossy"):
                     lines.append(f"Path = igpu-rdna2/{v}/{fsr4_dll.CYBOMAN_DLL_NAME}\nFolder = -\nAttributes = A\n")
                 return subprocess.CompletedProcess(argv, 0, stdout="\n".join(lines), stderr="")
+            requested_7z.extend(argv[argv.index("--") + 1:])
             stage = next(a[2:] for a in argv if a.startswith("-o"))
-            for v, data in self.variants.items():
-                p = os.path.join(stage, "igpu-rdna2", v, fsr4_dll.CYBOMAN_DLL_NAME)
+            for rel_member in argv[argv.index("--") + 1:]:
+                variant = rel_member.split("/")[-2]
+                p = os.path.join(stage, rel_member)
                 os.makedirs(os.path.dirname(p), exist_ok=True)
                 with open(p, "wb") as f:
-                    f.write(data)
+                    f.write(self.variants[variant])
             return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
 
         urls = []
@@ -314,6 +331,12 @@ class CybomanFetch(unittest.TestCase):
             spool=self._fake_spool(urls), which=lambda n: "/usr/bin/7z" if n == "7z" else None, run=ok_run,
         )
         self.assertEqual(meta["extracted_from"], "7z")
+        self.assertEqual(set(requested_7z), {
+            f"igpu-rdna2/4.1.2l-exact/{fsr4_dll.CYBOMAN_DLL_NAME}",
+            f"igpu-rdna2/4.1.2l-lossy/{fsr4_dll.CYBOMAN_DLL_NAME}",
+        })
+        self.assertFalse(os.path.lexists(os.path.join(self.cache, "exact")))
+        self.assertFalse(os.path.lexists(os.path.join(self.cache, "lossy")))
         self.assertEqual(len(urls), 1)
         self.assertTrue(urls[0].endswith(".7z"))
 
@@ -332,9 +355,11 @@ class CybomanFetch(unittest.TestCase):
         self.assertEqual(meta2["extracted_from"], "zip")
         self.assertTrue(urls2[0].endswith(".7z") and urls2[1].endswith(".zip"))
         self.assertTrue(fsr4_dll.cyboman_status(cache2)["ready"])
+        self.assertFalse(os.path.lexists(os.path.join(cache2, "exact")))
+        self.assertFalse(os.path.lexists(os.path.join(cache2, "lossy")))
 
     def test_archive_path_resilience_and_security_guards(self):
-        # Archive without leading igpu-rdna2/ prefix (custom wrapper dir) still works
+        # Archive without leading igpu-rdna2/ prefix (custom wrapper dir) still works and skips exact/lossy
         alt_zip = _cyboman_zip(self.variants, prefix="custom-root")
         self.zip_bytes = alt_zip
         rel_meta = self._release_json(include_7z=False, include_sums=False)
@@ -344,30 +369,34 @@ class CybomanFetch(unittest.TestCase):
             spool=self._fake_spool(), which=lambda _n: None,
         )
         self.assertTrue(fsr4_dll.cyboman_status(self.cache)["ready"])
+        self.assertEqual(set(meta["variants"]), {"4.1.2l-exact", "4.1.2l-lossy"})
         self.assertEqual(meta["variants"]["4.1.2l-exact"]["sha256"],
                          hashlib.sha256(self.variants["4.1.2l-exact"]).hexdigest())
+        self.assertFalse(os.path.lexists(os.path.join(self.cache, "exact")))
 
         # Ambiguous duplicate variant entries are refused
         dup_zip = _cyboman_zip(self.variants, prefix="igpu-rdna2",
-                               extra=[(f"rx6000/exact/{fsr4_dll.CYBOMAN_DLL_NAME}", b"other")])
+                               extra=[(f"rx6000/4.1.2l-exact/{fsr4_dll.CYBOMAN_DLL_NAME}", b"other")])
         with self.assertRaisesRegex(fsr4_dll.FetchError, "ambiguous"):
             fsr4_dll._extract_zip_variants(io.BytesIO(dup_zip), self.cache, {}, self.tag, "x.zip", "0" * 64)
 
-        # Traversal & symlink entries in ZIP are refused
+        # Traversal & symlink entries in ZIP are refused (even under skipped dirs)
         bad_zip = _cyboman_zip(self.variants, extra=[("../evil.dll", b"x")])
         with self.assertRaisesRegex(fsr4_dll.FetchError, "unsafe"):
             fsr4_dll._extract_zip_variants(io.BytesIO(bad_zip), self.cache, {}, self.tag, "x.zip", "0" * 64)
 
-        sym_out = io.BytesIO()
-        with zipfile.ZipFile(sym_out, "w") as zf:
-            info = zipfile.ZipInfo(f"igpu-rdna2/exact/{fsr4_dll.CYBOMAN_DLL_NAME}")
-            info.external_attr = (stat.S_IFLNK | 0o777) << 16
-            zf.writestr(info, b"/etc/passwd")
-        with self.assertRaisesRegex(fsr4_dll.FetchError, "symlink"):
-            fsr4_dll._extract_zip_variants(io.BytesIO(sym_out.getvalue()), self.cache, {}, self.tag, "x.zip", "0" * 64)
+        for sym_member in (f"igpu-rdna2/4.1.2l-exact/{fsr4_dll.CYBOMAN_DLL_NAME}",
+                           f"igpu-rdna2/exact/{fsr4_dll.CYBOMAN_DLL_NAME}"):
+            sym_out = io.BytesIO()
+            with zipfile.ZipFile(sym_out, "w") as zf:
+                info = zipfile.ZipInfo(sym_member)
+                info.external_attr = (stat.S_IFLNK | 0o777) << 16
+                zf.writestr(info, b"/etc/passwd")
+            with self.assertRaisesRegex(fsr4_dll.FetchError, "symlink"):
+                fsr4_dll._extract_zip_variants(io.BytesIO(sym_out.getvalue()), self.cache, {}, self.tag, "x.zip", "0" * 64)
 
         # SHA256SUMS DLL mismatch is refused
-        bad_sums = {f"igpu-rdna2/exact/{fsr4_dll.CYBOMAN_DLL_NAME}": "0" * 64}
+        bad_sums = {f"igpu-rdna2/4.1.2l-exact/{fsr4_dll.CYBOMAN_DLL_NAME}": "0" * 64}
         with self.assertRaisesRegex(fsr4_dll.FetchError, "checksum mismatch"):
             fsr4_dll._extract_zip_variants(io.BytesIO(alt_zip), self.cache, bad_sums, self.tag, "x.zip", "0" * 64)
 

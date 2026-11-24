@@ -6,7 +6,7 @@
 Supports two isolated injection backends under one per-game manifest:
   * Cyboman RDNA 2 Overrides (zgauthier2000/fsr4-shader-performance-overrides): swaps
     amd_fidelityfx_upscaler_dx12.dll (with .fsr4deck.orig SHA-256 backup + PE 4.1.1.2740 guard) across
-    4.1.2l-exact, 4.1.2l-lossy, exact, and lossy variants.
+    the 4.1.2l-exact and 4.1.2l-lossy Steam Deck Lite variants.
   * Official AMD Lite (baseline): pairs amdxcffx64.dll (fetched from AMD) with bin/amdxc64.dll (LGPL shim)
     and WINEDLLOVERRIDES=amdxc64=n,b.
 

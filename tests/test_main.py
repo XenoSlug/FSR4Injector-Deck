@@ -226,7 +226,7 @@ class Download(PluginTest):
         self.assertTrue(self.p._cyboman_cancel)
 
         # Corrupt one Cyboman cached file -> verify_library catches it
-        os.remove(fsr4_dll.cyboman_variant_path(main._cyboman_dir(), "exact"))
+        os.remove(fsr4_dll.cyboman_variant_path(main._cyboman_dir(), "4.1.2l-lossy"))
         self.assertFalse((await self.p.verify_library())["state"]["cyboman"]["ready"])
 
 
@@ -281,6 +281,45 @@ class Games(PluginTest):
         self.assertEqual(warn["detected_version"], "4.0.0.1")
         forced = await self.p.enable_game(APPID, "", "4.1.2l-exact", True)
         self.assertTrue(forced["ok"])
+
+    async def test_desktop_variants_rejected_and_legacy_manifest_rolls_back(self):
+        for rejected in ("exact", "lossy"):
+            res = await self.p.enable_game(APPID, "", rejected)
+            self.assertFalse(res["ok"])
+            self.assertIn("Unknown FSR4 variant", res["error"])
+
+        orig_path = os.path.join(self.target, I.UPSCALER_DLL)
+        with open(orig_path, "rb") as f:
+            orig_bytes = f.read()
+        legacy_bytes = b"legacy-exact-dll"
+        _write(os.path.join(self.target, I.UPSCALER_BACKUP), orig_bytes)
+        _write(orig_path, legacy_bytes)
+        _write(self.p.manifest.path, json.dumps({
+            str(APPID): {
+                "target_dir": self.target,
+                "backend": I.BACKEND_CYBOMAN,
+                "variant": "exact",
+                "release_tag": "dll-2026-11-20",
+                "files": {I.UPSCALER_DLL: main.dk_fs.sha256_file(orig_path)},
+                "backup": {
+                    "file": I.UPSCALER_BACKUP,
+                    "target": I.UPSCALER_DLL,
+                    "sha256": main.dk_fs.sha256_file(os.path.join(self.target, I.UPSCALER_BACKUP)),
+                    "pe_version": "4.1.1.2740",
+                },
+                "launch_original": "-novid",
+                "launch_applied": "env MLSR-WATERMARK=1 %command% -novid",
+            }
+        }).encode())
+        p = await self.start()
+        g = (await p.get_state())["state"]["games"][0]
+        self.assertTrue(g["enabled"])
+        self.assertEqual((g["backend"], g["variant"], g["verdict"]), ("cyboman", "exact", "ok"))
+        off = await p.disable_game(APPID, "env MLSR-WATERMARK=1 %command% -novid")
+        self.assertEqual((off["ok"], off["launch_options"], off["kept"]), (True, "-novid", []))
+        with open(orig_path, "rb") as f:
+            self.assertEqual(f.read(), orig_bytes)
+        self.assertFalse(os.path.exists(os.path.join(self.target, I.UPSCALER_BACKUP)))
 
     async def test_launch_options_steam_did_not_keep_are_recorded_and_reported(self):
         res = await self.p.enable_game(APPID, "-novid")

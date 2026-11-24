@@ -550,15 +550,56 @@ class CybomanSwapAndRollback(unittest.TestCase):
         with open(self.upscaler, "rb") as f:
             self.assertEqual(f.read(), self.orig_bytes)
         self.assertIn(I.SHIM, os.listdir(self.target))
-        # Switch Official AMD Lite -> Cyboman (exact)
-        o3 = I.enable_variant(self.m, self.game, "exact", launch_options=o2, watermark=False,
+        # Switch Official AMD Lite -> Cyboman (4.1.2l-lossy)
+        o3 = I.enable_variant(self.m, self.game, "4.1.2l-lossy", launch_options=o2, watermark=False,
                               cyboman_cache_dir=self.cache, cyboman_tag="dll-2026-11-22")
         self.assertEqual(o3, "-novid")
         self.assertNotIn(I.SHIM, os.listdir(self.target))
         self.assertNotIn(I.FFX, os.listdir(self.target))
         with open(self.upscaler, "rb") as f:
-            self.assertEqual(f.read(), b"cyboman-exact")
+            self.assertEqual(f.read(), b"cyboman-4.1.2l-lossy")
         self.assertEqual(self.m.entries[77]["launch_original"], "-novid")
+
+    def test_rejects_omitted_desktop_variants_and_rolls_back_legacy_entries(self):
+        for rejected in ("exact", "lossy"):
+            with self.assertRaisesRegex(I.InstallError, "Unknown FSR4 variant"):
+                I.enable_variant(self.m, self.game, rejected,
+                                 cyboman_cache_dir=self.cache, cyboman_tag="dll-2026-11-22")
+        self.assertNotIn(77, self.m.entries)
+
+        # Legacy manifest entries referencing exact/lossy must still load, verify, and roll back cleanly
+        for legacy_variant in ("exact", "lossy"):
+            legacy_bytes = f"legacy-{legacy_variant}".encode()
+            _write(os.path.join(self.target, I.UPSCALER_BACKUP), self.orig_bytes)
+            _write(self.upscaler, legacy_bytes)
+            _write(self.mpath, json.dumps({
+                "77": {
+                    "target_dir": self.target,
+                    "backend": I.BACKEND_CYBOMAN,
+                    "variant": legacy_variant,
+                    "release_tag": "dll-2026-11-20",
+                    "files": {I.UPSCALER_DLL: hashlib.sha256(legacy_bytes).hexdigest()},
+                    "backup": {
+                        "file": I.UPSCALER_BACKUP,
+                        "target": I.UPSCALER_DLL,
+                        "sha256": hashlib.sha256(self.orig_bytes).hexdigest(),
+                        "pe_version": "4.1.1.2740",
+                    },
+                    "launch_original": "-novid",
+                    "launch_applied": "env MLSR-WATERMARK=1 %command% -novid",
+                }
+            }).encode())
+            m_legacy = I.Manifest(self.mpath)
+            self.assertEqual(m_legacy.problem, "")
+            self.assertEqual(I.entry_backend(m_legacy.entries[77]), I.BACKEND_CYBOMAN)
+            self.assertEqual(I.entry_variant(m_legacy.entries[77]), legacy_variant)
+            self.assertEqual(I.cyboman_verdict(m_legacy.entries[77])[0], "ok")
+
+            res = I.disable(m_legacy, 77, "env MLSR-WATERMARK=1 %command% -novid")
+            self.assertEqual(res, {"launch_options": "-novid", "kept": []})
+            self.assertEqual(sorted(os.listdir(self.target)), [I.UPSCALER_DLL])
+            with open(self.upscaler, "rb") as f:
+                self.assertEqual(f.read(), self.orig_bytes)
 
 
 class ManifestSafety(unittest.TestCase):

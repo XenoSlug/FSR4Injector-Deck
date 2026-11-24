@@ -32,7 +32,7 @@ const cybomanState = (over = {}) => ({
   update_available: false,
   extractor: '7z',
   repo: 'zgauthier2000/fsr4-shader-performance-overrides',
-  variants: ['4.1.2l-exact', '4.1.2l-lossy', 'exact', 'lossy'],
+  variants: ['4.1.2l-exact', '4.1.2l-lossy'],
   expected_pe_version: '4.1.1.2740',
   download: { state: 'idle', done: 0, total: 0, stage: '', error: '' },
   ...over,
@@ -130,13 +130,19 @@ test('per-game variant selector, badges, lossy warning, and PE mismatch modal', 
   let tree = await open(h, state({ games: [flagged] }));
   const dd = dropdownOf(tree, 'Spider-Man');
   assert.equal(dd.props.selectedOption, 'off');
-  assert.deepEqual([...dd.props.rgOptions.map(o => o.data)], ['off', '4.1.2l-exact', '4.1.2l-lossy', 'exact', 'lossy', 'official-lite']);
+  assert.deepEqual([...dd.props.rgOptions.map(o => o.data)], ['off', '4.1.2l-exact', '4.1.2l-lossy', 'official-lite']);
+  assert.deepEqual([...dd.props.rgOptions.map(o => o.label)], [
+    'Off',
+    '4.1.2 Lite — Exact (Recommended)',
+    '4.1.2 Lite — Lossy',
+    'Official AMD Lite',
+  ]);
   assert.ok(findText(dd.props.description, 'OptiScaler detected'));
   assert.ok(findText(dd.props.description, 'RADV cswave32 warning'));
   assert.ok(findText(dd.props.description, 'PE 4.0.0.1'));
 
   // Selecting 4.1.2l-exact triggers PE mismatch modal when backend returns pe_mismatch: true
-  dd.props.onChange({ data: '4.1.2l-exact', label: '4.1.2l-exact (Recommended)' });
+  dd.props.onChange({ data: '4.1.2l-exact', label: '4.1.2 Lite — Exact (Recommended)' });
   await settle();
   const call = h.respond('enable_game', {
     ok: false, error: 'PE mismatch', pe_mismatch: true, detected_version: '4.0.0.1', expected_version: '4.1.1.2740',
@@ -153,7 +159,14 @@ test('per-game variant selector, badges, lossy warning, and PE mismatch modal', 
   assert.deepEqual(forced.args, [1817070, DLO, '4.1.2l-exact', true]);
   await settle();
   tree = h.render();
-  assert.ok(findText(dropdownOf(tree, 'Spider-Man').props.description, 'Alternating-frame neural pass'));
+  assert.ok(findText(dropdownOf(tree, 'Spider-Man').props.description, '4.1.2 Lite — Lossy'));
+
+  // Legacy Cyboman manifest entry still exposes only the 4 choices so it can be switched or turned Off
+  tree = await open(panel(), state({
+    games: [{ ...game, enabled: true, backend: 'cyboman', variant: 'exact', verdict: 'ok', reason: 'Cyboman exact active.' }],
+  }));
+  assert.deepEqual([...dropdownOf(tree, 'Spider-Man').props.rgOptions.map(o => o.data)],
+    ['off', '4.1.2l-exact', '4.1.2l-lossy', 'official-lite']);
 });
 
 test('Steam and non-Steam games are two lists with DropdownItems', async () => {
@@ -271,7 +284,9 @@ test('Cyboman download polls progress and supports cancel', async () => {
   assert.equal(find(h.render(), 'Field', 'Downloading Cyboman (.7z)…').props.children, '5 MB / 9 MB');
   h.respond('download_cyboman', ok(state()));
   await settle();
-  assert.equal(find(h.render(), 'Field', 'Cyboman RDNA 2 (dll-2026-11-22)').props.children, 'Ready');
+  const readyField = find(h.render(), 'Field', 'Cyboman RDNA 2 (dll-2026-11-22)');
+  assert.equal(readyField.props.children, 'Ready');
+  assert.match(readyField.props.description, /2 Lite variants cached/);
 });
 
 test('Official AMD Lite section expands on demand and polls AMD download', async () => {
