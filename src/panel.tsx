@@ -1,21 +1,24 @@
 // SPDX-License-Identifier: BSD-3-Clause
 // Copyright (c) 2026 Rayekkk
 
-// The Quick Access panel: AMD's library, the games, launch options and the About page with updates.
+// The Quick Access panel: Cyboman RDNA 2 Overrides, Official AMD Lite baseline, per-game variant selection,
+// launch options, and the About page with updates.
 import { useQuickAccessVisible } from "@decky/api";
-import { Field, Focusable, PanelSection, PanelSectionRow, ToggleField } from "@decky/ui";
+import { DropdownItem, Field, Focusable, PanelSection, PanelSectionRow, ToggleField } from "@decky/ui";
 import { FC, ReactNode, useCallback, useEffect, useState } from "react";
 import { AboutPage, INSTALL_HINT, UpdateController, UpdateSection } from "./about";
 import {
-  applyWatermark, cancelDownload, checkForUpdates, disableGame, downloadDll, downloadProgress, enableGame, Game,
-  getState, performUpdate, readLaunchOptions, saveLaunchOptions, scanGames, setSetting, State, StateResult, verifyLibrary,
+  applyWatermark, cancelCybomanDownload, cancelDownload, checkCybomanRelease, checkForUpdates, cybomanProgress,
+  disableGame, downloadCyboman, downloadDll, downloadProgress, enableGame, Game, getState, performUpdate,
+  readLaunchOptions, saveLaunchOptions, scanGames, setSetting, State, StateResult, VariantId, verifyLibrary,
 } from "./api";
 import {
-  ANTICHEAT_WARNING, copyText, hasLaunchOptionsPlugin, isNonSteam, MB, offerToLaunchOptionsPlugin, onlineStatus,
-  VERDICT_LABEL,
+  ANTICHEAT_WARNING, copyText, CYBOMAN_ONLINE_WARNING, hasLaunchOptionsPlugin, hasRadvCswave32, isCybomanVariant,
+  isLossyVariant, isNonSteam, LOSSY_TRADEOFF_WARNING, MB, offerToLaunchOptionsPlugin, onlineStatus,
+  RADV_CSWAVE32_WARNING, VARIANT_BY_ID, VARIANTS, VERDICT_LABEL,
 } from "./shared";
 import { errorText } from "./result";
-import { ActionButton, colors, infoRow, notify, PageHeader, SectionLink, statusPlaceholder } from "./ui";
+import { ActionButton, colors, confirmAction, infoRow, notify, PageHeader, SectionLink, statusPlaceholder } from "./ui";
 
 const NAME = "FSR4 Injector";
 
@@ -27,8 +30,29 @@ let updates: UpdateController | null = null;
 const updater = () => (updates ??= new UpdateController({ check: checkForUpdates, download: performUpdate }, "fsr4injector"));
 export const closeUpdates = () => { updates?.dispose(); updates = null; };
 
-// A failed change, under the control it belongs to, until that control's next outcome (UI.md §5).
 const failure = (text?: string): ReactNode => text ? <div style={{ color: colors.error }}>{text}</div> : null;
+
+const badgeStyle = (border: string, bg: string, fg: string) => ({
+  display: "inline-block",
+  fontSize: "11px",
+  lineHeight: "1.2",
+  padding: "2px 6px",
+  borderRadius: "4px",
+  border: `1px solid ${border}`,
+  backgroundColor: bg,
+  color: fg,
+  marginRight: "6px",
+  marginTop: "4px",
+});
+
+const cybomanStageText = (stage: string) => {
+  if (stage === "checking") return "Checking GitHub release…";
+  if (stage === "downloading_7z") return "Downloading Cyboman (.7z)…";
+  if (stage === "extracting_7z") return "Extracting .7z variants…";
+  if (stage === "downloading_zip") return "Downloading Cyboman (.zip fallback)…";
+  if (stage === "extracting_zip") return "Extracting .zip variants…";
+  return "Downloading Cyboman RDNA 2…";
+};
 
 export const Content: FC = () => {
   const visible = useQuickAccessVisible();
@@ -39,13 +63,16 @@ export const Content: FC = () => {
   const [bulk, setBulk] = useState<{ kind: "on" | "off" | "repair"; text: string } | null>(null);
   const [error, setError] = useState("");
   const [failed, setFailed] = useState<Record<string, string>>({});
+  const [liveRadv, setLiveRadv] = useState<Record<number, boolean>>({});
+  const [amdExpanded, setAmdExpanded] = useState(false);
+  const [cybomanChecking, setCybomanChecking] = useState(false);
+  const [cybomanCheckMsg, setCybomanCheckMsg] = useState("");
   const [page, setPage] = useState<"about" | null>(null);
-  const [left, setLeft] = useState(false);  // About was just closed: its row takes the focus again.
+  const [left, setLeft] = useState(false);
 
   const setState = useCallback((s: State) => { lastState = s; setStateRaw(s); }, []);
   const mark = useCallback((at: string | number, text = "") => setFailed(f => ({ ...f, [at]: text })), []);
-  // An answer's state replaces the panel's; a failed call keeps the last state and says why: a toast titled `title`
-  // and, with `at`, a line under that control.
+
   const take = useCallback(<R extends StateResult>(r: R, title?: string, at?: string | number): R => {
     if (r.state) setState(r.state);
     if (!r.ok && title) notify(title, r.error ?? "Failed");
@@ -63,11 +90,12 @@ export const Content: FC = () => {
     setScanning(true);
     if (manual) setScanResult("");
     const r = take(await scanGames(), NAME, manual ? "rescan" : undefined);
-    if (manual && r.state) setScanResult(`Found ${r.state.games.length} compatible game${r.state.games.length === 1 ? "" : "s"}.`);
+    if (manual && r.state) {
+      setScanResult(`Found ${r.state.games.length} compatible game${r.state.games.length === 1 ? "" : "s"}.`);
+    }
     setScanning(false);
   }, [take]);
 
-  // getState is instant; the backend scans the library at startup, so only wait for a scan if it has not finished.
   const load = useCallback(async () => {
     const r = await getState();
     take(r);
@@ -76,10 +104,9 @@ export const Content: FC = () => {
   }, [take, rescan]);
   useEffect(() => { load(); }, [load]);
 
-  // Poll the download's progress while it runs (the RPC itself only returns when it is finished); reads no files.
+  // Poll Official AMD Lite download progress
   useEffect(() => {
     if (state?.download.state !== "running") return;
-    // Each tick decides from its own answer: the download_dll call may belong to a panel the QAM has since remounted.
     const t = setInterval(async () => {
       const r = await downloadProgress();
       if (!r.ok || !r.download || !lastState) return;
@@ -89,19 +116,86 @@ export const Content: FC = () => {
     return () => clearInterval(t);
   }, [state?.download.state, setState, refresh]);
 
+  // Poll Cyboman RDNA 2 download progress
+  useEffect(() => {
+    if (state?.cyboman?.download.state !== "running") return;
+    const t = setInterval(async () => {
+      const r = await cybomanProgress();
+      if (!r.ok || !r.download || !lastState) return;
+      if (r.download.state === "running") {
+        setState({
+          ...lastState,
+          cyboman: { ...lastState.cyboman, download: r.download, ready: !!r.cyboman_ready },
+        });
+      } else {
+        refresh();
+      }
+    }, 500);
+    return () => clearInterval(t);
+  }, [state?.cyboman?.download.state, setState, refresh]);
+
   const startDownload = async () => {
     if (state) setState({ ...state, download: { ...state.download, state: "running", done: 0 } });
-    take(await downloadDll(), "FSR4 download failed");
+    take(await downloadDll(), "AMD FSR4 download failed");
   };
 
-  // Returns whether the game ended up in the requested state; errors are shown per game.
-  const apply = async (game: Game, on: boolean) => {
+  const startCybomanDownload = async () => {
+    setCybomanCheckMsg("");
+    if (state) {
+      setState({
+        ...state,
+        cyboman: { ...state.cyboman, download: { ...state.cyboman.download, state: "running", done: 0, stage: "checking" } },
+      });
+    }
+    take(await downloadCyboman(), "Cyboman download failed");
+  };
+
+  const checkCyboman = async () => {
+    setCybomanChecking(true);
+    setCybomanCheckMsg("");
+    const r = take(await checkCybomanRelease(), NAME, "cyboman_check");
+    if (r.ok && r.state) {
+      const latest = r.state.cyboman.latest_tag;
+      setCybomanCheckMsg(
+        r.state.cyboman.update_available
+          ? `Update available: ${latest}`
+          : latest
+            ? `Up to date (${latest})`
+            : "Release checked."
+      );
+    }
+    setCybomanChecking(false);
+  };
+
+  const applyVariant = async (game: Game, variant: VariantId, forcePeMismatch = false): Promise<boolean> => {
     try {
       const current = await readLaunchOptions(game.appid);
-      const res = take(await (on ? enableGame : disableGame)(game.appid, current), game.name, game.appid);
-      if (!res.ok) return false;
+      if (hasRadvCswave32(current)) setLiveRadv(m => ({ ...m, [game.appid]: true }));
+      else if (liveRadv[game.appid]) setLiveRadv(m => ({ ...m, [game.appid]: false }));
+
+      const res = variant === "off"
+        ? take(await disableGame(game.appid, current), game.name, game.appid)
+        : take(await enableGame(game.appid, current, variant, forcePeMismatch), game.name, game.appid);
+
+      if (!res.ok) {
+        if (res.pe_mismatch && !forcePeMismatch) {
+          const detected = res.detected_version || "unknown";
+          const expected = res.expected_version || "4.1.1.2740";
+          confirmAction(
+            `Unexpected ${game.name} DLL version`,
+            `Found amd_fidelityfx_upscaler_dx12.dll version ${detected}, expected ${expected} (OptiScaler / FSR 4.1.1). ` +
+              "Swapping an incompatible version can crash the game. Swap anyway?",
+            "Swap anyway",
+            () => { void selectVariant(game, variant, true); },
+            { destructive: true },
+          );
+        }
+        return false;
+      }
       if (res.launch_options !== undefined && res.launch_options !== current) {
-        if (!take(await saveLaunchOptions(game.appid, res.launch_options), game.name, game.appid).ok && on) return false;
+        if (!take(await saveLaunchOptions(game.appid, res.launch_options), game.name, game.appid).ok && variant !== "off") {
+          return false;
+        }
       }
       if (res.kept?.length) notify(game.name, `Left files you changed in place: ${res.kept.join(", ")}`);
       return true;
@@ -112,24 +206,35 @@ export const Content: FC = () => {
     }
   };
 
-  const toggle = async (game: Game, on: boolean) => {
+  const selectVariant = async (game: Game, variant: VariantId, forcePeMismatch = false) => {
     setBusy(game.appid);
-    await apply(game, on);
+    await applyVariant(game, variant, forcePeMismatch);
     setBusy(null);
   };
 
-  // One game at a time, so each keeps its own launch options and errors. Restoring all is also the cleanup before a
-  // real uninstall: plugin updates keep games configured (Decky runs uninstall on update).
+  const canCybomanNow = (s: State) => s.cyboman.ready && !!s.gpu?.model && !s.error;
+  const canNativeNow = (s: State) => s.dll_ready && s.shim_ready && !!s.gpu?.model && !s.error;
+
+  const pickBulkVariant = (s: State, g: Game): VariantId | null => {
+    const cyboReady = canCybomanNow(s);
+    const nativeReady = canNativeNow(s);
+    const peOk = !g.upscaler_version || g.upscaler_version === s.cyboman.expected_pe_version;
+    if (cyboReady && g.cyboman_eligible && peOk) return "4.1.2l-exact";
+    if (nativeReady && g.native_eligible !== false) return "official-lite";
+    return null;
+  };
+
   const applyAll = async (on: boolean) => {
-    // Turning on skips online games too; a game Steam has no categories for counts as online rather than a guess.
-    const candidates = (state?.games ?? []).filter(g => (on ? !g.enabled && !g.anticheat : g.enabled));
-    const targets = on ? candidates.filter(g => onlineStatus(g.appid) === "offline") : candidates;
+    if (!state) return;
+    const candidates = state.games.filter(g => (on ? !g.enabled && !g.anticheat : g.enabled));
+    const targets = on ? candidates.filter(g => onlineStatus(g.appid) === "offline" && pickBulkVariant(state, g)) : candidates;
     const skipped = candidates.length - targets.length;
     let ok = 0;
     setBusy(-1);
     for (const [i, g] of targets.entries()) {
       setBulk({ kind: on ? "on" : "off", text: `${i + 1}/${targets.length}` });
-      if (await apply(g, on)) ok++;
+      const targetVariant = on ? pickBulkVariant(state, g) : "off";
+      if (targetVariant && await applyVariant(g, targetVariant)) ok++;
     }
     setBulk(null);
     setBusy(null);
@@ -137,26 +242,34 @@ export const Content: FC = () => {
     const games = (n: number) => `${n} game${n === 1 ? "" : "s"}`;
     notify(NAME, (on ? `FSR4 turned on in ${games(ok)}.` : `${games(ok)} restored to how they were.`) +
       (failedGames ? ` ${games(failedGames)} could not be changed; see the messages above.` : "") +
-      (skipped ? ` Skipped as possibly online: ${games(skipped)}; turn ${skipped === 1 ? "it" : "them"} on by hand if you want.` : ""));
+      (skipped ? ` Skipped as online, anti-cheat, or missing OptiScaler/PE match: ${games(skipped)}.` : ""));
   };
 
-  // Repair: AMD's library must still pass its checksum, then every game that has FSR4 on is set up again.
   const repairAll = async () => {
     setBusy(-1);
     try {
       const next = take(await verifyLibrary(), NAME, "repair").state;
       if (!next) return;
-      if (!next.dll_ready) {
-        const damaged = "AMD's FSR4 library is missing or damaged. Download it again above, then repair.";
+      const targets = next.games.filter(g => g.enabled);
+      const needsNative = targets.some(g => (g.backend ?? "native") === "native");
+      const needsCyboman = targets.some(g => g.backend === "cyboman");
+      if (needsNative && !next.dll_ready) {
+        const damaged = "Official AMD FSR4 library is missing or damaged. Download it again before repairing.";
         notify(NAME, damaged);
         mark("repair", damaged);
         return;
       }
-      const targets = next.games.filter(g => g.enabled);
+      if (needsCyboman && !next.cyboman.ready) {
+        const damaged = "Cyboman RDNA 2 cache is missing or damaged. Download it again before repairing.";
+        notify(NAME, damaged);
+        mark("repair", damaged);
+        return;
+      }
       let ok = 0;
       for (const [i, g] of targets.entries()) {
         setBulk({ kind: "repair", text: `${i + 1}/${targets.length}` });
-        if (await apply(g, true)) ok++;
+        const variant: VariantId = g.variant && g.variant !== "off" ? g.variant : "official-lite";
+        if (await applyVariant(g, variant)) ok++;
       }
       notify(NAME, `Repaired ${ok} of ${targets.length} game${targets.length === 1 ? "" : "s"}.`);
     } finally {
@@ -165,7 +278,6 @@ export const Content: FC = () => {
     }
   };
 
-  // The new setting applies at once to every game whose launch options the plugin manages.
   const setWatermark = async (on: boolean) => {
     setBusy(-1);
     try {
@@ -173,8 +285,9 @@ export const Content: FC = () => {
       for (const g of next?.games.filter(g => g.enabled && g.managed_options) ?? []) {
         const current = await readLaunchOptions(g.appid);
         const res = take(await applyWatermark(g.appid, current), g.name, g.appid);
-        if (res.ok && res.launch_options !== undefined && res.launch_options !== current)
+        if (res.ok && res.launch_options !== undefined && res.launch_options !== current) {
           take(await saveLaunchOptions(g.appid, res.launch_options), g.name, g.appid);
+        }
       }
     } catch (e) {
       notify(NAME, errorText(e));
@@ -194,54 +307,118 @@ export const Content: FC = () => {
 
   if (!state) return <>
     {statusPlaceholder({ title: NAME, label: `${NAME} unavailable`, error, onRetry: () => { setError(""); load(); } })}
-    {/* A plugin that cannot start can still be updated. */}
     {error && <UpdateSection controller={updater()} version={__PLUGIN_VERSION__} />}
   </>;
 
   if (page === "about") return <Focusable onCancelActionDescription="Back" onCancelButton={e => {
     e.preventDefault();
-    e.stopPropagation();  // B goes back to the main page instead of closing the menu.
+    e.stopPropagation();
     navigate(null);
   }}>
     <PageHeader title="About" back={NAME} onBack={() => navigate(null)} focus={visible} />
     <AboutPage name={NAME} version={state.version} license="BSD-3-Clause" source="github.com/XenoSlug/FSR4Injector-Deck"
-      description="AMD's official FSR 4 upscaler, with the Lite model for Steam Deck, in FSR 3.1 games under Proton."
-      notes="The amdxc64 shim is LGPL-2.1+; its source is included in the plugin package."
+      description="Steam Deck (Van Gogh / RDNA 2) FSR 4.1.2 Variant Manager integrating Cyboman RDNA 2 overrides and Official AMD Lite."
+      notes="Shim (amdxc64.dll) is LGPL-2.1+. Downloaded Cyboman builds are GPL-2.0; Official AMD download is subject to AMD's EULA."
       updates={updater()} home={state.home} install={`${INSTALL_HINT} Your games stay set up.`} />
   </Focusable>;
 
   const settings = state.settings ?? { auto_launch_options: true, watermark: false, session_toast: false };
   const dl = state.download;
+  const cybo = state.cyboman;
+  const cyboDl = cybo.download;
   const gpu = state.gpu;
-  const canEnable = state.dll_ready && state.shim_ready && !!gpu?.model && !state.error;
+  const canCyboman = canCybomanNow(state);
+  const canNative = canNativeNow(state);
+  const canEnableAny = canCyboman || canNative;
   const pci = gpu ? `1002:${gpu.device.toString(16).padStart(4, "0")}` : "";
-  // Steam and non-Steam games: the same section, one under the other.
+  const showAmdDetails = amdExpanded || dl.state === "running" || dl.state === "error";
+
+  const gameOptions = (g: Game) => {
+    const opts = [{ data: "off" as VariantId, label: VARIANT_BY_ID.off.label }];
+    const includeCybo = (g.cyboman_eligible && canCyboman) || isCybomanVariant(g.variant);
+    if (includeCybo) {
+      for (const v of VARIANTS) {
+        if (v.cyboman) opts.push({ data: v.id, label: v.label });
+      }
+    }
+    const includeNative = (g.native_eligible !== false && canNative) || g.variant === "official-lite";
+    if (includeNative) {
+      opts.push({ data: "official-lite", label: VARIANT_BY_ID["official-lite"].label });
+    }
+    return opts;
+  };
+
   const gameList = (title: string, games: Game[], hint: string) => (
     <PanelSection title={title}>
       {games.length === 0 && (!state.scanned || scanning ? infoRow("Scanning your library…")
         : infoRow(`No compatible ${title.replace("Non-", "non-")} found`, hint))}
-      {games.map(g => (
-        <PanelSectionRow key={g.appid}>
-          <ToggleField
-            label={g.name}
-            description={<>
-              {g.enabled ? `${VERDICT_LABEL[g.verdict]}. ${g.reason}`
-                : !g.anticheat && onlineStatus(g.appid) === "online"
-                  ? "Online multiplayer: skipped by Turn on all. Turning it on is at your own risk." : null}
-              {g.anticheat && <div style={{ color: colors.error }}>{ANTICHEAT_WARNING}</div>}
-              {failure(failed[g.appid])}
-            </>}
-            checked={g.enabled}
-            disabled={busy !== null || (!g.enabled && !canEnable)}
-            onChange={on => toggle(g, on)}
-          />
-        </PanelSectionRow>
-      ))}
+      {games.map(g => {
+        const selected: VariantId = g.enabled ? (g.variant ?? "official-lite") : "off";
+        const opts = gameOptions(g);
+        const radvWarn = g.radv_cswave32 || !!liveRadv[g.appid];
+        const isOnline = !g.anticheat && onlineStatus(g.appid) === "online";
+        const peMismatch = !!g.cyboman_eligible && !!g.upscaler_version
+          && g.upscaler_version !== cybo.expected_pe_version && g.backend !== "cyboman";
+        return (
+          <PanelSectionRow key={g.appid}>
+            <DropdownItem
+              label={g.name}
+              layout="below"
+              menuLabel={`${g.name} — FSR4 Variant`}
+              rgOptions={opts}
+              selectedOption={selected}
+              disabled={busy !== null || state.error !== "" || !gpu?.model || (!g.enabled && opts.length <= 1)}
+              onChange={opt => void selectVariant(g, opt.data as VariantId)}
+              description={<>
+                {(g.optiscaler_detected || radvWarn || peMismatch) && (
+                  <div>
+                    {g.optiscaler_detected && (
+                      <span style={badgeStyle(colors.accent, colors.surface, colors.accent)}>OptiScaler detected</span>
+                    )}
+                    {peMismatch && (
+                      <span style={badgeStyle(colors.warning, colors.warningSurface, colors.warning)}>
+                        {`PE ${g.upscaler_version} ≠ ${cybo.expected_pe_version}`}
+                      </span>
+                    )}
+                    {radvWarn && (
+                      <span style={badgeStyle(colors.warning, colors.warningSurface, colors.warning)}>
+                        RADV cswave32 warning
+                      </span>
+                    )}
+                  </div>
+                )}
+                {g.enabled && <div>{`${VERDICT_LABEL[g.verdict]}. ${g.reason}`}</div>}
+                {!g.enabled && !g.cyboman_eligible && canCyboman && (
+                  <div style={{ color: colors.muted }}>
+                    Requires OptiScaler / {`amd_fidelityfx_upscaler_dx12.dll`} for Cyboman overrides.
+                  </div>
+                )}
+                {isLossyVariant(selected) && (
+                  <div style={{
+                    color: colors.warning,
+                    backgroundColor: colors.warningSurface,
+                    padding: "4px 6px",
+                    borderRadius: "4px",
+                    marginTop: "4px",
+                  }}>
+                    {LOSSY_TRADEOFF_WARNING}
+                  </div>
+                )}
+                {radvWarn && <div style={{ color: colors.warning, marginTop: "4px" }}>{RADV_CSWAVE32_WARNING}</div>}
+                {isOnline && <div style={{ color: colors.error, marginTop: "4px" }}>{CYBOMAN_ONLINE_WARNING}</div>}
+                {g.anticheat && <div style={{ color: colors.error, marginTop: "4px" }}>{ANTICHEAT_WARNING}</div>}
+                {failure(failed[g.appid])}
+              </>}
+            />
+          </PanelSectionRow>
+        );
+      })}
     </PanelSection>
   );
+
   return (
     <>
-      <PanelSection title={`AMD FSR ${state.recipe.fsr}`}>
+      <PanelSection title="Cyboman RDNA 2 Overrides">
         {state.error && infoRow("Games cannot be changed", failure(state.error))}
         {gpu?.model && !gpu.verified && infoRow("Beta", "FSR 4 is not tested on this GPU yet. Report problems on GitHub.")}
         <PanelSectionRow>
@@ -249,40 +426,121 @@ export const Content: FC = () => {
             <Field label="No Steam Deck GPU found" description="FSR4 Injector requires a Steam Deck." />
           ) : gpu.model ? (
             <Field label={`${gpu.arch} GPU`}
-              description={`PCI ${pci}. AMD's FSR ${state.recipe.fsr} picks its ${gpu.model_name} model here.`} />
+              description={`PCI ${pci}. Supports Cyboman RDNA 2 & AMD FSR ${state.recipe.fsr} (${gpu.model_name}).`} />
           ) : (
             <Field label="GPU not supported"
               description="Only Steam Deck (Van Gogh) is supported by this edition." />
           )}
         </PanelSectionRow>
-        {state.dll_ready ? (
-          <PanelSectionRow><Field label="AMD FSR4 DLL" description={state.recipe.driver}>Ready</Field></PanelSectionRow>
-        ) : dl.state === "running" ? (
+
+        {cyboDl.state === "running" ? (
           <>
             <PanelSectionRow>
-              <Field label="Downloading from AMD…">{MB(dl.done)} / {MB(dl.total)}</Field>
+              <Field label={cybomanStageText(cyboDl.stage)}>
+                {cyboDl.total > 0 ? `${MB(cyboDl.done)} / ${MB(cyboDl.total)}` : "Preparing…"}
+              </Field>
             </PanelSectionRow>
-            <PanelSectionRow><ActionButton onClick={async () => take(await cancelDownload())}>Cancel</ActionButton></PanelSectionRow>
+            <PanelSectionRow>
+              <ActionButton onClick={async () => take(await cancelCybomanDownload())}>Cancel</ActionButton>
+            </PanelSectionRow>
+          </>
+        ) : cybo.ready ? (
+          <>
+            <PanelSectionRow>
+              <Field
+                label={`Cyboman RDNA 2 (${cybo.tag || "cached"})`}
+                description={`4 variants cached (${cybo.extracted_from === "7z" ? ".7z" : ".zip"})${cybo.update_available ? ` · ${cybo.latest_tag} available` : ""}`}
+              >
+                Ready
+              </Field>
+            </PanelSectionRow>
+            {cyboDl.state === "error" && infoRow("Last attempt failed", cyboDl.error)}
+            {cybo.update_available ? (
+              <PanelSectionRow>
+                <ActionButton disabled={busy !== null} onClick={startCybomanDownload}>
+                  {`Update to ${cybo.latest_tag}`}
+                </ActionButton>
+              </PanelSectionRow>
+            ) : (
+              <PanelSectionRow>
+                <ActionButton
+                  disabled={busy !== null || cybomanChecking}
+                  onClick={checkCyboman}
+                  description={failure(failed.cyboman_check) || cybomanCheckMsg || undefined}
+                >
+                  {cybomanChecking ? "Checking GitHub…" : "Check Cyboman release"}
+                </ActionButton>
+              </PanelSectionRow>
+            )}
           </>
         ) : (
           <>
             <PanelSectionRow>
               <Field
-                label="AMD FSR4 DLL needed"
-                description={`Fetches the FSR4 library from AMD's official ${state.recipe.driver} package (about 43 MB, nothing else is kept). By downloading you accept the AMD Software EULA: ${state.eula_url}`}
+                label="Cyboman RDNA 2 needed"
+                description={`Fetches zgauthier2000 RDNA 2 iGPU builds (${cybo.extractor === "zip" ? ".zip ~100 MB" : `.7z ~9 MB via ${cybo.extractor}, .zip fallback`}). Single-player / offline only (GPL-2.0).`}
               />
             </PanelSectionRow>
-            {dl.state === "error" && infoRow("Last attempt failed", dl.error)}
-            <PanelSectionRow><ActionButton onClick={startDownload}>Accept and download</ActionButton></PanelSectionRow>
+            {cyboDl.state === "error" && infoRow("Last attempt failed", cyboDl.error)}
+            <PanelSectionRow>
+              <ActionButton disabled={busy !== null} onClick={startCybomanDownload}>
+                Download Cyboman RDNA 2
+              </ActionButton>
+            </PanelSectionRow>
           </>
         )}
+      </PanelSection>
+
+      <PanelSection title={`Official AMD Lite (${state.recipe.fsr})`}>
+        <PanelSectionRow>
+          <Field
+            label="Official AMD Lite"
+            description={`${state.recipe.driver} · baseline for unmodified DX12 FSR 3.1+ games`}
+          >
+            {state.dll_ready ? "Ready" : "Not downloaded"}
+          </Field>
+        </PanelSectionRow>
         {!state.shim_ready && infoRow("Plugin files incomplete", "bin/amdxc64.dll is missing. Reinstall the plugin.")}
+        {dl.state !== "running" && (
+          <PanelSectionRow>
+            <ActionButton onClick={() => setAmdExpanded(v => !v)}>
+              {showAmdDetails ? "Hide Official AMD Lite setup" : "Show Official AMD Lite setup"}
+            </ActionButton>
+          </PanelSectionRow>
+        )}
+        {showAmdDetails && (
+          state.dll_ready ? (
+            infoRow("AMD FSR4 DLL", "Verified on disk. Pick Official AMD Lite on any compatible game below.")
+          ) : dl.state === "running" ? (
+            <>
+              <PanelSectionRow>
+                <Field label="Downloading from AMD…">{MB(dl.done)} / {MB(dl.total)}</Field>
+              </PanelSectionRow>
+              <PanelSectionRow>
+                <ActionButton onClick={async () => take(await cancelDownload())}>Cancel</ActionButton>
+              </PanelSectionRow>
+            </>
+          ) : (
+            <>
+              <PanelSectionRow>
+                <Field
+                  label="AMD FSR4 DLL needed"
+                  description={`Fetches the unmodified FSR4 library from AMD's ${state.recipe.driver} package (~43 MB). By downloading you accept the AMD Software EULA: ${state.eula_url}`}
+                />
+              </PanelSectionRow>
+              {dl.state === "error" && infoRow("Last attempt failed", dl.error)}
+              <PanelSectionRow>
+                <ActionButton disabled={busy !== null} onClick={startDownload}>Accept and download</ActionButton>
+              </PanelSectionRow>
+            </>
+          )
+        )}
       </PanelSection>
 
       {gameList("Steam games", state.games.filter(g => !isNonSteam(g)),
-        "Install a game with FSR 3.1 or newer, then rescan your library.")}
+        "Install a game with OptiScaler or FSR 3.1+, then rescan your library.")}
       {gameList("Non-Steam games", state.games.filter(isNonSteam),
-        "Add a Windows game with FSR 3.1 or newer to Steam with Add a Non-Steam Game, then rescan your library.")}
+        "Add a Windows game with OptiScaler or FSR 3.1+ to Steam, then rescan your library.")}
 
       <PanelSection title="All games">
         <PanelSectionRow>
@@ -291,18 +549,18 @@ export const Content: FC = () => {
             {scanning ? "Scanning…" : "Rescan library"}
           </ActionButton>
         </PanelSectionRow>
-        {canEnable && state.games.some(g => !g.enabled && !g.anticheat) && (
+        {canEnableAny && state.games.some(g => !g.enabled && !g.anticheat) && (
           <PanelSectionRow>
             <ActionButton disabled={busy !== null} onClick={() => applyAll(true)}
-              description="Sets up every compatible game in both lists. Online games and games with anti-cheat are skipped.">
-              {bulk?.kind === "on" ? `Turning on… ${bulk.text}` : "Turn on FSR4 in all games"}
+              description="Sets up eligible offline games (4.1.2l-exact for OptiScaler 4.1.1.2740, else Official AMD Lite). Online and anti-cheat games are skipped.">
+              {bulk?.kind === "on" ? `Turning on… ${bulk.text}` : "Turn on FSR4 in offline games"}
             </ActionButton>
           </PanelSectionRow>
         )}
         {state.games.some(g => g.enabled) && (
           <PanelSectionRow>
             <ActionButton disabled={busy !== null} onClick={() => applyAll(false)}
-              description="Removes the plugin's files and launch option from every game, leaving them as they were. Do this before uninstalling.">
+              description="Restores original DLLs and launch options for every game across both backends. Do this before uninstalling.">
               {bulk?.kind === "off" ? `Restoring… ${bulk.text}` : "Turn off FSR4 and restore all games"}
             </ActionButton>
           </PanelSectionRow>
@@ -310,8 +568,7 @@ export const Content: FC = () => {
         {state.games.some(g => g.enabled) && (
           <PanelSectionRow>
             <ActionButton disabled={busy !== null} onClick={repairAll}
-              description={<>Checks AMD's library and puts the plugin's files and launch option back in every game that has
-                FSR4 on, for example after a game update or Steam's file check.{failure(failed.repair)}</>}>
+              description={<>Re-checks cached DLLs and repairs configured games. Externally modified Cyboman DLLs are flagged, not overwritten.{failure(failed.repair)}</>}>
               {bulk?.kind === "repair" ? `Repairing… ${bulk.text}` : "Repair FSR4 in all games"}
             </ActionButton>
           </PanelSectionRow>
@@ -319,8 +576,7 @@ export const Content: FC = () => {
         <PanelSectionRow>
           <ToggleField
             label="Tell me when FSR4 runs"
-            description={<>A short notification during the game once AMD's library runs FSR 4, with its model. None yet:
-              the game has not used FSR so far; the result also shows here after the game.{failure(failed.session_toast)}</>}
+            description={<>A short notification during the game once Official AMD Lite runs FSR 4.{failure(failed.session_toast)}</>}
             checked={settings.session_toast}
             disabled={busy !== null}
             onChange={async on => take(await setSetting("session_toast", on), NAME, "session_toast")}
@@ -332,8 +588,7 @@ export const Content: FC = () => {
         <PanelSectionRow>
           <ToggleField
             label="Add launch option automatically"
-            description={<>{`Turning FSR4 on for a game adds ${state.copy_options.plain} to its launch options. ` +
-              "Off: add it yourself; the plugin then leaves the game's launch options alone."}{failure(failed.auto_launch_options)}</>}
+            description={<>Manages WINEDLLOVERRIDES / watermarks per game automatically. Off: leave game launch options alone.{failure(failed.auto_launch_options)}</>}
             checked={settings.auto_launch_options}
             disabled={busy !== null}
             onChange={async on => take(await setSetting("auto_launch_options", on), NAME, "auto_launch_options")}
@@ -341,29 +596,33 @@ export const Content: FC = () => {
         </PanelSectionRow>
         <PanelSectionRow>
           <ToggleField
-            label="Show AMD's FSR4 watermark"
-            description={<>Also adds FSR_WATERMARK=1, so AMD's library shows which FSR 4 model runs. Applies to the games set
-              up above at once.{failure(failed.watermark)}</>}
+            label="Show FSR4 watermark"
+            description={<>Adds env MLSR-WATERMARK=1 (Cyboman) or FSR_WATERMARK=1 (Official AMD Lite) to managed games.{failure(failed.watermark)}</>}
             checked={settings.auto_launch_options && settings.watermark}
             disabled={busy !== null || !settings.auto_launch_options}
             onChange={setWatermark}
           />
         </PanelSectionRow>
         <PanelSectionRow>
+          <ActionButton onClick={() => copy(state.copy_options.cyboman_watermark)}
+            description={state.copy_options.cyboman_watermark}>
+            Copy Cyboman watermark
+          </ActionButton>
+        </PanelSectionRow>
+        <PanelSectionRow>
           <ActionButton onClick={() => copy(state.copy_options.plain)} description={state.copy_options.plain}>
-            Copy launch options
+            Copy AMD Lite launch options
           </ActionButton>
         </PanelSectionRow>
         <PanelSectionRow>
           <ActionButton onClick={() => copy(state.copy_options.watermark)} description={state.copy_options.watermark}>
-            Copy launch options + watermark
+            Copy AMD Lite + watermark
           </ActionButton>
         </PanelSectionRow>
         {hasLaunchOptionsPlugin() && (
           <PanelSectionRow>
             <ActionButton onClick={() => offerToLaunchOptionsPlugin(state.copy_options)}
-              description={"Adds FSR4 Injector and AMD FSR4 watermark to Decky Launch Options, to switch per game there. " +
-                "Then turn off Add launch option automatically above; FSR4 still has to be on here for the game's files."}>
+              description={"Adds FSR4 Injector and watermark options to Decky Launch Options."}>
               Add to Decky Launch Options
             </ActionButton>
           </PanelSectionRow>

@@ -1,15 +1,42 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2026 Rayekkk
 
-"""What FSR4 was last confirmed working with, so an update to SteamOS or Proton is noticed before the user wonders.
+"""What FSR4 was last confirmed working with, and SteamOS RADV environment guardrails.
 
 A fingerprint is taken from the status of a session where FSR4 ran: the SteamOS build, the Proton the game was
 launched with (the shim records Steam's STEAM_COMPAT_TOOL_PATHS) and its version file, and the shim version.
+Also inspects Steam launch options for RADV_PERFTEST=cswave32, which adds ~1.1 ms overhead to FSR 4 on RADV.
 """
 
 import os
+import re
+import shlex
 
 OS_RELEASE = "/etc/os-release"
+_RADV_PERFTEST_RE = re.compile(r"""^RADV_PERFTEST=(["']?)(.*)\1$""")
+
+
+def _split_launch_words(options):
+    """Split Steam launch options safely, preserving tokens even with unmatched quotes."""
+    text = (options or "").strip()
+    if not text:
+        return []
+    try:
+        return shlex.split(text)
+    except ValueError:
+        return text.split()
+
+
+def has_radv_cswave32(launch_options):
+    """True when launch_options enables RADV_PERFTEST=cswave32 (alone or in a comma-separated list)."""
+    for word in _split_launch_words(launch_options):
+        match = _RADV_PERFTEST_RE.match(word)
+        if not match:
+            continue
+        flags = [part.strip().lower() for part in match.group(2).split(",") if part.strip()]
+        if "cswave32" in flags:
+            return True
+    return False
 
 
 def steamos_build(path=OS_RELEASE):

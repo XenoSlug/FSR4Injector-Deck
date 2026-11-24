@@ -5,13 +5,13 @@
   "api_version": 1,
   "main": "main.py",
   "bin": "dist/index.js",
-  "version": "1.2.1",
+  "version": "2.0.0",
   "publish": {
     "tags": [
       "utilities",
       "graphics"
     ],
-    "description": "Official AMD FSR 4.1.2 Lite in FSR 3.1+ games on Steam Deck (LCD & OLED) under Proton.",
+    "description": "Steam Deck (Van Gogh / RDNA 2) FSR 4.1.2 Variant Manager integrating Cyboman RDNA 2 overrides and Official AMD Lite under Proton.",
     "image": "https://raw.githubusercontent.com/XenoSlug/FSR4Injector-Deck/main/FSR4Injector.png"
   }
 }

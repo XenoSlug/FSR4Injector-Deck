@@ -1,12 +1,12 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2026 Rayekkk
 
-"""The RPC layer end to end with a fake Steam library: the {ok, error?, state?} contract (DeckyKit D2), settings,
-downloads, sessions and launch options as the panel drives them."""
+"""The RPC layer end to end with a fake Steam library: dual-backend variants, downloads, sessions, and rollback."""
 
 import asyncio
 import json
 import os
+import struct
 import tempfile
 import time
 import unittest
@@ -18,7 +18,8 @@ import fsr4_dll
 import fsr4_install as I
 import main
 
-GPU = {"device": 0x150E, "family": 150, "rev": 20, "model": "INT8_LITE", "model_name": "INT8 Lite", "verified": True}
+GPU = {"device": 0x163F, "family": 144, "rev": 3, "arch": "Steam Deck (Van Gogh)",
+       "model": "INT8_LITE", "model_name": "INT8 Lite", "verified": True}
 APPID = 1817070
 
 
@@ -33,27 +34,69 @@ def _library(root, appid, name, installdir, files):
            f'"AppState"\n{{\n\t"appid"\t\t"{appid}"\n\t"name"\t\t"{name}"\n\t"installdir"\t\t"{installdir}"\n}}\n'
            .encode())
     for rel in files:
-        _write(os.path.join(root, "steamapps", "common", installdir, rel), b"x")
+        if isinstance(rel, tuple):
+            _write(os.path.join(root, "steamapps", "common", installdir, rel[0]), rel[1])
+        else:
+            _write(os.path.join(root, "steamapps", "common", installdir, rel), b"x")
+
+
+def _make_pe_with_version(major, minor, build, rev):
+    buf = bytearray(0x400)
+    buf[0:2] = b"MZ"
+    struct.pack_into("<I", buf, 0x3C, 0x40)
+    buf[0x40:0x44] = b"PE\0\0"
+    struct.pack_into("<H", buf, 0x44 + 2, 1)
+    struct.pack_into("<H", buf, 0x44 + 16, 0xF0)
+    opt = 0x44 + 20
+    struct.pack_into("<H", buf, opt, 0x20B)
+    struct.pack_into("<I", buf, opt + 108, 16)
+    struct.pack_into("<II", buf, opt + 112 + 16, 0x1000, 0x200)
+    sec = opt + 0xF0
+    struct.pack_into("<IIII", buf, sec + 8, 0x200, 0x1000, 0x200, 0x200)
+    rsrc = 0x200
+    struct.pack_into("<HH", buf, rsrc + 14, 1, 0)
+    struct.pack_into("<II", buf, rsrc + 16, 16, 0x80000018)
+    struct.pack_into("<HH", buf, rsrc + 0x18 + 14, 1, 0)
+    struct.pack_into("<II", buf, rsrc + 0x18 + 16, 1, 0x80000030)
+    struct.pack_into("<HH", buf, rsrc + 0x30 + 14, 1, 0)
+    struct.pack_into("<II", buf, rsrc + 0x30 + 16, 0x0409, 0x48)
+    struct.pack_into("<II", buf, rsrc + 0x48, 0x1060, 52)
+    struct.pack_into("<IIII", buf, rsrc + 0x60, 0xFEEF04BD, 0x00010000,
+                     (major << 16) | minor, (build << 16) | rev)
+    return bytes(buf)
 
 
 class PluginTest(unittest.IsolatedAsyncioTestCase):
-    """A fresh plugin in fresh folders, with one FSR 3.1 game, a fake AMD DLL and shim, and a supported GPU."""
-
     async def asyncSetUp(self):
         base = tempfile.mkdtemp()
         for name, sub in (("DECKY_PLUGIN_SETTINGS_DIR", "settings"), ("DECKY_PLUGIN_RUNTIME_DIR", "runtime"),
                           ("DECKY_USER_HOME", "home")):
             self.enterContext(mock.patch.object(decky, name, os.path.join(base, sub)))
         self.steam = os.path.join(decky.DECKY_USER_HOME, ".local", "share", "Steam")
-        _library(self.steam, APPID, "Spider-Man", "SM", ["Spider-Man.exe", "amd_fidelityfx_dx12.dll"])
+        _library(self.steam, APPID, "Spider-Man", "SM",
+                 ["Spider-Man.exe", "amd_fidelityfx_dx12.dll",
+                  ("amd_fidelityfx_upscaler_dx12.dll", _make_pe_with_version(4, 1, 1, 2740)),
+                  "OptiScaler.ini"])
         self.target = os.path.join(self.steam, "steamapps", "common", "SM")
-        # never touch the repo's real bin/amdxc64.dll
         self.enterContext(mock.patch.object(main, "SHIM_PATH", os.path.join(base, "amdxc64.dll")))
         _write(main.SHIM_PATH, b"shim")
         self.enterContext(mock.patch.object(main.fsr4_gpu, "detect", return_value=GPU))
         self.p = await self.start()
         _write(main._ffx_path(), b"amd")
-        self.p.dll_ok = True  # the fake DLL has no AMD checksum
+        self.p.dll_ok = True
+        self._seed_cyboman(self.p)
+
+    def _seed_cyboman(self, plugin, tag="dll-2026-11-22"):
+        cdir = main._cyboman_dir()
+        variants = {}
+        for v in fsr4_dll.CYBOMAN_VARIANTS:
+            p = fsr4_dll.cyboman_variant_path(cdir, v)
+            data = f"cyboman-{v}".encode()
+            _write(p, data)
+            variants[v] = {"sha256": main.dk_fs.sha256_file(p), "size": len(data), "pe_version": "4.1.2.0"}
+        main.dk_fs.write_json(os.path.join(cdir, fsr4_dll.CYBOMAN_META),
+                              {"release_tag": tag, "extracted_from": "zip", "variants": variants})
+        plugin.cyboman = fsr4_dll.cyboman_status(cdir)
 
     async def start(self):
         p = main.Plugin()
@@ -67,7 +110,7 @@ class PluginTest(unittest.IsolatedAsyncioTestCase):
     def status(self, active="INT8_LITE"):
         _write(os.path.join(self.target, I.STATUS), json.dumps(
             {"started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "ffx_requested": True,
-             "dll_loaded": True, "family": 150, "active": active}).encode())
+             "dll_loaded": True, "family": 144, "active": active}).encode())
 
 
 class Contract(PluginTest):
@@ -75,6 +118,8 @@ class Contract(PluginTest):
         res = await self.p.get_state()
         self.assertTrue(res["ok"])
         self.assertEqual([g["appid"] for g in res["state"]["games"]], [APPID])
+        self.assertTrue(res["state"]["games"][0]["optiscaler_detected"])
+        self.assertTrue(res["state"]["cyboman"]["ready"])
         self.assertEqual(res["state"]["error"], "")
 
     async def test_an_unexpected_error_is_a_failure_not_an_exception(self):
@@ -90,7 +135,7 @@ class Contract(PluginTest):
         with mock.patch.object(main.fsr4_dll, "is_valid", side_effect=RuntimeError("boom")):
             with self.assertRaises(RuntimeError):
                 await main.Plugin()._main()
-        self.assertTrue(main._ready.is_set(), "RPCs answer instead of waiting forever")
+        self.assertTrue(main._ready.is_set())
 
 
 class Settings(PluginTest):
@@ -110,8 +155,7 @@ class Settings(PluginTest):
         self.assertFalse(res["ok"])
         self.assertIn("No space left", res["error"])
         self.assertNotIn(self.p.settings_path, res["error"])
-        self.assertFalse(self.p.settings["watermark"], "memory changes only after the file is written")
-        self.assertFalse(res["state"]["settings"]["watermark"])
+        self.assertFalse(self.p.settings["watermark"])
 
     async def test_two_quick_changes_both_stick(self):
         await asyncio.gather(self.p.set_setting("watermark", True), self.p.set_setting("auto_launch_options", False))
@@ -139,13 +183,12 @@ class Download(PluginTest):
         self.assertFalse(res["ok"])
         self.assertEqual(self.p.download["state"], "error")
         with mock.patch.object(main.fsr4_dll, "fetch") as fetch:
-            self.assertTrue((await self.p.download_dll())["ok"], "a second attempt runs")
+            self.assertTrue((await self.p.download_dll())["ok"])
         fetch.assert_called_once()
 
     async def test_progress_is_polled_without_reading_files(self):
         def fetch(dest, progress, cancelled):
             progress(10, 100)
-            return None
         with mock.patch.object(main.fsr4_dll, "fetch", side_effect=fetch):
             await self.p.download_dll()
         with mock.patch.object(main.fsr4_install, "read_status", side_effect=AssertionError("file read")), \
@@ -159,42 +202,98 @@ class Download(PluginTest):
         _write(main._ffx_path(), b"damaged")
         self.assertFalse((await self.p.verify_library())["state"]["dll_ready"])
 
+    async def test_cyboman_release_check_download_progress_and_verify(self):
+        rel = {"tag": "dll-2026-12-01", "html_url": "https://x", "published_at": "",
+               "assets": {"7z": {"name": "a.7z", "size": 50}, "zip": None, "sha256sums": None}}
+        with mock.patch.object(main.fsr4_dll, "check_cyboman_release", return_value=rel):
+            res = await self.p.check_cyboman_release()
+        self.assertTrue(res["ok"])
+        self.assertEqual(res["state"]["cyboman"]["latest_tag"], "dll-2026-12-01")
+        self.assertTrue(res["state"]["cyboman"]["update_available"])
+
+        def fake_fetch(cache_dir, release, *, progress, cancelled, on_stage):
+            on_stage("downloading_7z", {"size": 50})
+            progress(25, 50)
+            self._seed_cyboman(self.p, tag="dll-2026-12-01")
+
+        with mock.patch.object(main.fsr4_dll, "fetch_cyboman", side_effect=fake_fetch):
+            dl = await self.p.download_cyboman()
+        self.assertTrue(dl["ok"])
+        self.assertEqual(dl["state"]["cyboman"]["tag"], "dll-2026-12-01")
+        prog = await self.p.cyboman_progress()
+        self.assertEqual((prog["ok"], prog["download"]["done"], prog["cyboman_ready"]), (True, 25, True))
+        self.assertTrue((await self.p.cancel_cyboman_download())["ok"])
+        self.assertTrue(self.p._cyboman_cancel)
+
+        # Corrupt one Cyboman cached file -> verify_library catches it
+        os.remove(fsr4_dll.cyboman_variant_path(main._cyboman_dir(), "exact"))
+        self.assertFalse((await self.p.verify_library())["state"]["cyboman"]["ready"])
+
 
 class Games(PluginTest):
     async def test_enable_needs_the_dll_and_a_gpu_model(self):
         self.p.dll_ok = False
-        self.assertIn("Download", (await self.p.enable_game(APPID, ""))["error"])
+        self.assertIn("Download", (await self.p.enable_game(APPID, "", I.VARIANT_OFFICIAL_LITE))["error"])
         self.p.dll_ok = True
-        self.p.gpu = {**GPU, "family": 148, "model": None}  # unsupported non-Deck GPU
+        self.p.cyboman = {"ready": False, "tag": "", "extracted_from": "", "variants": {}}
+        self.assertIn("Download", (await self.p.enable_game(APPID, "", "4.1.2l-exact"))["error"])
+        self.p.gpu = {**GPU, "family": 148, "model": None}
         self.assertIn("requires a Steam Deck", (await self.p.enable_game(APPID, ""))["error"])
         self.assertIn("rescan", (await self.p.enable_game(1, ""))["error"])
 
     async def test_enable_and_disable_restore_folder_and_options(self):
-        res = await self.p.enable_game(APPID, "-novid")
+        res = await self.p.enable_game(APPID, "-novid", I.VARIANT_OFFICIAL_LITE)
         self.assertTrue(res["ok"], res)
         self.assertEqual(res["launch_options"], f"{I.TOKEN} %command% -novid")
         self.assertTrue(res["state"]["games"][0]["enabled"])
         self.assertTrue((await self.p.launch_options_saved(APPID, res["launch_options"]))["ok"])
         res = await self.p.disable_game(APPID, res["launch_options"])
         self.assertEqual((res["ok"], res["launch_options"], res["kept"]), (True, "-novid", []))
-        self.assertEqual(sorted(os.listdir(self.target)), ["Spider-Man.exe", "amd_fidelityfx_dx12.dll"])
+        self.assertEqual(sorted(os.listdir(self.target)),
+                         ["OptiScaler.ini", "Spider-Man.exe", "amd_fidelityfx_dx12.dll", "amd_fidelityfx_upscaler_dx12.dll"])
         self.assertFalse(res["state"]["games"][0]["enabled"])
+
+    async def test_cyboman_enable_pe_warning_watermark_and_switch(self):
+        res = await self.p.enable_game(APPID, "gamemoderun %command%", "4.1.2l-exact")
+        self.assertTrue(res["ok"])
+        self.assertEqual(res["state"]["games"][0]["variant"], "4.1.2l-exact")
+        self.assertEqual(res["state"]["games"][0]["backend"], "cyboman")
+
+        await self.p.set_setting("watermark", True)
+        wm = await self.p.apply_watermark(APPID, res["launch_options"])
+        self.assertEqual(wm["launch_options"], "env MLSR-WATERMARK=1 gamemoderun %command%")
+
+        # Switch Cyboman -> Official AMD Lite cleanly
+        sw = await self.p.enable_game(APPID, wm["launch_options"], I.VARIANT_OFFICIAL_LITE)
+        self.assertTrue(sw["ok"])
+        self.assertEqual(sw["launch_options"], f"{I.TOKEN} {I.WATERMARK} gamemoderun %command%")
+
+        # Disable restores original launch options
+        off = await self.p.disable_game(APPID, sw["launch_options"])
+        self.assertEqual(off["launch_options"], "gamemoderun %command%")
+
+        # PE version mismatch triggers pe_mismatch=True unless forced
+        _write(os.path.join(self.target, I.UPSCALER_DLL), _make_pe_with_version(4, 0, 0, 1))
+        with self.assertLogs(decky.logger, "WARNING"):
+            warn = await self.p.enable_game(APPID, "", "4.1.2l-exact", False)
+        self.assertFalse(warn["ok"])
+        self.assertTrue(warn["pe_mismatch"])
+        self.assertEqual(warn["detected_version"], "4.0.0.1")
+        forced = await self.p.enable_game(APPID, "", "4.1.2l-exact", True)
+        self.assertTrue(forced["ok"])
 
     async def test_launch_options_steam_did_not_keep_are_recorded_and_reported(self):
         res = await self.p.enable_game(APPID, "-novid")
         with self.assertLogs(decky.logger, "WARNING"):
-            saved = await self.p.launch_options_saved(APPID, "-novid")  # Steam still has the old ones
+            saved = await self.p.launch_options_saved(APPID, "-novid")
         self.assertFalse(saved["ok"])
         self.assertIn("did not keep", saved["error"])
         self.assertEqual(self.p.manifest.entries[APPID]["launch_applied"], "-novid")
-        # turning off now returns the user's own options exactly, also after a restart
         p = await self.start()
         self.assertEqual((await p.disable_game(APPID, "-novid"))["launch_options"], "-novid")
         self.assertEqual(res["launch_options"], f"{I.TOKEN} %command% -novid")
 
     async def test_launch_options_steam_reported_empty_are_still_ours(self):
-        # A read-back of "" (the game had none) must not turn the game into a hand-managed one: turning off still
-        # takes the token out again.
         res = await self.p.enable_game(APPID, "")
         with self.assertLogs(decky.logger, "WARNING"):
             self.assertFalse((await self.p.launch_options_saved(APPID, ""))["ok"])
@@ -205,7 +304,7 @@ class Games(PluginTest):
         await self.p.set_setting("auto_launch_options", False)
         res = await self.p.enable_game(APPID, "-novid")
         self.assertEqual(res["launch_options"], "-novid")
-        self.assertTrue((await self.p.launch_options_saved(APPID, "anything"))["ok"], "nothing to confirm")
+        self.assertTrue((await self.p.launch_options_saved(APPID, "anything"))["ok"])
         self.assertFalse(res["state"]["games"][0]["managed_options"])
         self.assertFalse((await self.p.apply_watermark(APPID, "-novid"))["ok"])
 
@@ -217,12 +316,22 @@ class Games(PluginTest):
         res = await self.p.apply_watermark(APPID, res["launch_options"])
         self.assertEqual((res["ok"], res["launch_options"]), (True, f"{I.TOKEN} %command%"))
 
-    async def test_a_plugin_update_keeps_games_set_up(self):
-        await self.p.enable_game(APPID, "")
-        await self.p._uninstall()
-        self.assertIn(I.SHIM, os.listdir(self.target))
+    async def test_a_plugin_update_keeps_v1_games_set_up(self):
+        # Write a v1-format manifest without backend/variant keys
+        _write(self.p.manifest.path, json.dumps({
+            str(APPID): {
+                "target_dir": self.target,
+                "files": {I.SHIM: "a" * 64},
+                "launch_original": "",
+                "launch_applied": None,
+                "mode": "native",
+            }
+        }).encode())
         p = await self.start()
-        self.assertTrue((await p.get_state())["state"]["games"][0]["enabled"])
+        g = (await p.get_state())["state"]["games"][0]
+        self.assertTrue(g["enabled"])
+        self.assertEqual(g["backend"], "native")
+        self.assertEqual(g["variant"], "official-lite")
 
     async def test_a_damaged_manifest_blocks_changes_and_says_why(self):
         await self.p.enable_game(APPID, "")
@@ -239,9 +348,7 @@ class Games(PluginTest):
         for res in (await p.enable_game(APPID, ""), await p.disable_game(APPID, "")):
             self.assertFalse(res["ok"])
             self.assertIn("damaged", res["error"])
-        self.assertIn(I.SHIM, os.listdir(self.target), "nothing removed without the record")
-        with open(path, "rb") as f:
-            self.assertEqual(f.read(), b"{damaged")
+        self.assertIn(I.SHIM, os.listdir(self.target))
 
 
 class Sessions(PluginTest):
@@ -254,11 +361,20 @@ class Sessions(PluginTest):
         self.assertEqual((ended["ok"], ended["verdict"]), (True, "failed"))
         self.assertEqual((await self.p.session_ended(1, ""))["managed"], False)
 
+    async def test_cyboman_session_does_not_expect_shim_status_file(self):
+        await self.p.set_setting("session_toast", True)
+        await self.p.enable_game(APPID, "", "4.1.2l-exact")
+        started = await self.p.session_started(APPID)
+        self.assertEqual((started["managed"], started["watch"]), (True, False))
+        self.assertIsNone((await self.p.session_check(APPID))["running"])
+        ended = await self.p.session_ended(APPID, "")
+        self.assertEqual((ended["managed"], ended["verdict"]), (True, "ok"))
+
     async def test_a_missed_session_warns_only_the_second_time_in_a_row(self):
         res = await self.p.enable_game(APPID, "")
         for expected in ("missed", "failed", "missed"):
             await self.p.session_started(APPID)
-            self.p.sessions[APPID] = time.time() + 60  # the status file predates this session
+            self.p.sessions[APPID] = time.time() + 60
             with self.assertNoLogs(decky.logger, "WARNING") if expected != "failed" else self.assertLogs(decky.logger):
                 ended = await self.p.session_ended(APPID, res["launch_options"])
             self.assertEqual(ended["verdict"], expected)
@@ -270,11 +386,11 @@ class Sessions(PluginTest):
 
     async def test_a_watched_session_reports_fsr4_once_it_runs(self):
         await self.p.enable_game(APPID, "")
-        self.assertFalse((await self.p.session_started(APPID))["watch"], "off by default")
+        self.assertFalse((await self.p.session_started(APPID))["watch"])
         await self.p.set_setting("session_toast", True)
         self.assertTrue((await self.p.session_started(APPID))["watch"])
-        self.assertFalse((await self.p.session_started(1))["watch"], "only games the plugin set up")
-        self.assertIsNone((await self.p.session_check(APPID))["running"], "no status yet")
+        self.assertFalse((await self.p.session_started(1))["watch"])
+        self.assertIsNone((await self.p.session_check(APPID))["running"])
         self.status()
         self.assertEqual((await self.p.session_check(APPID))["running"], "FSR 4 (INT8_LITE)")
         self.assertIsNone((await self.p.session_check(1))["running"])

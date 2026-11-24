@@ -21,8 +21,7 @@ export default definePlugin(() => {
   // After a SteamOS update, say once that games are re-checked on their next session.
   startupNotice().then(r => { if (r.message) notify("FSR4 Injector", r.message); });
 
-  // With "Tell me when FSR4 runs" on, a running game's status is read every few seconds until FSR 4 runs in it.
-  // Only success is told during the game; failures wait for the verdict at its end.
+  // Only Official AMD Lite emits a live runtime status notification when FSR 4 starts.
   const watching = new Map<number, number | undefined>();  // appid → pending check
   const unwatch = (appid: number) => {
     window.clearTimeout(watching.get(appid));
@@ -36,9 +35,6 @@ export default definePlugin(() => {
     notify("FSR4 active", `${res.running} is running.`);
   }, 4000));
 
-  // Never fail silently: when a game we manage exits, tell the user if FSR4 was requested but not active.
-  // Launch options are passed on exit so a session our DLL missed can name the cause (e.g. another tool rewrote them).
-  // A backend that is restarting answers ok: false; the panel shows the same verdict next time it opens.
   const lifetime = SteamClient.GameSessions.RegisterForAppLifetimeNotifications(async n => {
     if (n?.bRunning) {
       watching.set(n.unAppID, undefined);

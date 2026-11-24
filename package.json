@@ -1,7 +1,7 @@
 {
   "name": "fsr4injector",
-  "version": "1.2.1",
-  "description": "DeckyLoader plugin: official AMD FSR 4.1.2 Lite for Steam Deck (Van Gogh) under Proton",
+  "version": "2.0.0",
+  "description": "DeckyLoader plugin: Steam Deck (Van Gogh / RDNA 2) FSR 4.1.2 Variant Manager (Cyboman RDNA 2 & Official AMD Lite)",
   "license": "BSD-3-Clause",
   "type": "module",
   "scripts": {
@@ -46,6 +46,10 @@
       "amdxcffx64",
       "amdvkffx64",
       "amd_fidelityfx",
+      "cyboman",
+      "igpu-rdna2",
+      "4\\.1\\.2l-",
+      "\\.7z$",
       "\\.exe$"
     ],
     "folder": "FSR4Injector",

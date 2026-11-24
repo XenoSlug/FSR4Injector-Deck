@@ -2,6 +2,20 @@
 
 All notable changes to FSR4 Injector, newest first.
 
+## [2.0.0] - 2026-11-25
+
+Refactored into a dual-backend Steam Deck (Van Gogh / RDNA 2) FSR 4.1.2 Variant Manager integrating `zgauthier2000/fsr4-shader-performance-overrides` while keeping Official AMD Lite as a baseline option.
+
+### ✨ Added
+- **Backends:** Integrated Cyboman RDNA 2 iGPU overrides (`4.1.2l-exact`, `4.1.2l-lossy`, `exact`, `lossy`) from `zgauthier2000/fsr4-shader-performance-overrides` with automatic `.7z` (`7zz`/`7z`/`bsdtar`) extraction and `.zip` fallback.
+- **Safety:** Added PE FileVersion inspection (`4.1.1.2740` warning + confirmation modal), SHA-256 verified `.fsr4deck.orig` backup/rollback for `amd_fidelityfx_upscaler_dx12.dll`, and clean switching between Cyboman and Official AMD Lite.
+- **Discovery:** Added OptiScaler marker detection (`OptiScaler.ini` / proxy DLLs) and `RADV_PERFTEST=cswave32` launch option guardrail warnings.
+- **Launch options:** Added POSIX-safe `env MLSR-WATERMARK=1` watermark injection and cleanup for Cyboman variants.
+
+### 🔧 Changed
+- **Panel:** Updated the Quick Access Menu with Cyboman RDNA 2 release controls, per-game variant dropdowns, inline lossy trade-off disclaimers, and a collapsible Official AMD Lite baseline section.
+- **Schema:** Extended `manifest.json` for dual backends while preserving full backwards compatibility and clean rollback for v1.x installs.
+
 ## [1.2.1] - 2026-11-05
 
 Ubisoft games from Non Steam Launchers are listed under their own names, which 1.2.0 did not do.

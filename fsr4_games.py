@@ -1,16 +1,25 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2026 Rayekkk
 
-"""Finding installed games that can take the FSR4 upgrade: Steam games and Windows games added to Steam as shortcuts.
+"""Finding installed games that can take FSR 4 upgrades: Steam games and Windows games added to Steam as shortcuts.
 
-A game qualifies when it ships AMD's FidelityFX API loader as a separate DLL (FSR 3.1+ / FSR4 through the FFX API):
-that is the only path the driver-side upgrade hooks into. The directory holding that DLL is where our two DLLs go.
+Detects:
+  * OptiScaler / modular FidelityFX SDK 2.x games (presence of amd_fidelityfx_upscaler_dx12.dll, plus optional
+    OptiScaler.ini / proxy DLLs) eligible for Cyboman RDNA 2 overrides,
+  * Native FSR 3.1+ DX12 games (amd_fidelityfx_dx12.dll / amd_fidelityfx_loader_dx12.dll / upscaler) eligible for
+    the Official AMD Lite shim path,
+  * Anti-cheat markers and RADV_PERFTEST=cswave32 launch option warnings.
 """
 
 import os
 import re
 
-FFX_DLLS = ("amd_fidelityfx_dx12.dll", "amd_fidelityfx_upscaler_dx12.dll", "amd_fidelityfx_loader_dx12.dll")
+import fsr4_dll
+import fsr4_env
+
+UPSCALER_DLL = "amd_fidelityfx_upscaler_dx12.dll"
+FFX_DLLS = ("amd_fidelityfx_dx12.dll", UPSCALER_DLL, "amd_fidelityfx_loader_dx12.dll")
+OPTISCALER_MARKERS = ("optiscaler.ini", "dxgi.dll", "winmm.dll", "version.dll")
 # Lower-case name fragments of anti-cheat files and folders: EAC, BattlEye, XIGNCODE, nProtect GameGuard,
 # PunkBuster, EQU8. Online games without any of these are caught by the panel through Steam's store categories.
 # Not "vanguard": Riot's lives outside game folders, and the word names game files (Mass Effect's Vanguard class).
@@ -29,6 +38,45 @@ def _values(text, key):
     return [v for k, v in _KV.findall(text) if k.lower() == key]
 
 
+def _steam_launch_options(steam_root):
+    """Best-effort {appid: launch_options} from Steam's userdata/*/config/localconfig.vdf."""
+    found = {}
+    userdata = os.path.join(steam_root, "userdata")
+    try:
+        users = os.listdir(userdata)
+    except OSError:
+        return found
+    for user in users:
+        path = os.path.join(userdata, user, "config", "localconfig.vdf")
+        try:
+            with open(path, encoding="utf-8", errors="replace") as f:
+                text = f.read()
+        except OSError:
+            continue
+        # Scan inside "apps" blocks for "<appid>" { ... "LaunchOptions" "..." ... }
+        stack = []
+        pending_key = None
+        for m in re.finditer(r'"((?:[^"\\]|\\.)*)"|\{|\}', text):
+            tok = m.group(0)
+            if tok == "{":
+                stack.append((pending_key or "").lower())
+                pending_key = None
+            elif tok == "}":
+                if stack:
+                    stack.pop()
+                pending_key = None
+            else:
+                val = m.group(1).replace('\\"', '"').replace("\\\\", "\\")
+                if pending_key is None:
+                    pending_key = val
+                else:
+                    if (pending_key.lower() == "launchoptions" and len(stack) >= 2
+                            and stack[-2] == "apps" and stack[-1].isdigit()):
+                        found.setdefault(int(stack[-1]), val)
+                    pending_key = None
+    return found
+
+
 def libraries(steam_root):
     """Steam library roots, the main one first."""
     roots = [steam_root]
@@ -45,7 +93,7 @@ def libraries(steam_root):
 
 
 def _find_ffx(install_dir):
-    """(directory with the FFX DLL, its name, anti-cheat seen) for one game."""
+    """Inspect install_dir for FidelityFX DLLs, OptiScaler markers, PE version, and anti-cheat."""
     found, anticheat = None, False
     base_depth = install_dir.rstrip(os.sep).count(os.sep)
     for root, dirs, files in os.walk(install_dir):
@@ -53,12 +101,31 @@ def _find_ffx(install_dir):
         if any(marker in n for n in names for marker in ANTICHEAT):
             anticheat = True
         if not found:
-            hit = next((f for f in files if f.lower() in FFX_DLLS), None)
-            if hit:
-                found = (root, hit)
+            lower_files = {f.lower(): f for f in files}
+            # Prefer amd_fidelityfx_upscaler_dx12.dll when multiple FFX DLLs coexist in the same folder
+            hit_name = next((lower_files[k] for k in (UPSCALER_DLL, *FFX_DLLS) if k in lower_files), None)
+            if hit_name:
+                upscaler_real = lower_files.get(UPSCALER_DLL)
+                cyboman_eligible = upscaler_real is not None
+                optiscaler_detected = "optiscaler.ini" in lower_files or (
+                    cyboman_eligible and any(marker in lower_files for marker in OPTISCALER_MARKERS)
+                )
+                upscaler_version = (
+                    fsr4_dll.read_pe_version(os.path.join(root, upscaler_real)) if upscaler_real else None
+                )
+                found = {
+                    "target_dir": root,
+                    "ffx_dll": hit_name,
+                    "native_eligible": True,
+                    "cyboman_eligible": cyboman_eligible,
+                    "optiscaler_detected": optiscaler_detected,
+                    "upscaler_version": upscaler_version,
+                }
         if root.count(os.sep) - base_depth >= MAX_DEPTH:
             dirs[:] = []
-    return (found[0], found[1], anticheat) if found else (None, None, anticheat)
+    if not found:
+        return None, anticheat
+    return found, anticheat
 
 
 def _binary_map(data, i):
@@ -152,6 +219,7 @@ def _shortcut_root(exe, options, registries):
 def scan(steam_root, keep=()):
     """Installed games with an FFX API DLL, sorted by name; keep: app ids with FSR 4 on."""
     games = []
+    steam_opts = _steam_launch_options(steam_root)
     for lib in libraries(steam_root):
         apps = os.path.join(lib, "steamapps")
         try:
@@ -164,8 +232,8 @@ def scan(steam_root, keep=()):
                     text = f.read()
             except OSError:
                 continue
-            appid, title, installdir = (_values(text, k) for k in ("appid", "name", "installdir"))
-            if not (appid and installdir) or not appid[0].isdigit():
+            appid_vals, title, installdir = (_values(text, k) for k in ("appid", "name", "installdir"))
+            if not (appid_vals and installdir) or not appid_vals[0].isdigit():
                 continue
             # installdir is a folder name in steamapps/common; anything path-like could lead out of the library
             # (a symlinked game folder is fine: it is still that name)
@@ -174,11 +242,17 @@ def scan(steam_root, keep=()):
             install_dir = os.path.join(apps, "common", installdir[0])
             if not os.path.isdir(install_dir):
                 continue
-            target, ffx, anticheat = _find_ffx(install_dir)
-            if target:
-                games.append({"appid": int(appid[0]), "name": title[0] if title else installdir[0],
-                              "install_dir": install_dir, "target_dir": target, "ffx_dll": ffx,
-                              "anticheat": anticheat})
+            info, anticheat = _find_ffx(install_dir)
+            if info:
+                aid = int(appid_vals[0])
+                games.append({
+                    "appid": aid,
+                    "name": title[0] if title else installdir[0],
+                    "install_dir": install_dir,
+                    **info,
+                    "anticheat": anticheat,
+                    "radv_cswave32": fsr4_env.has_radv_cswave32(steam_opts.get(aid, "")),
+                })
     # A shortcut is searched from its root down. One game folder belongs to one entry: two app ids over the same
     # files would undo each other's setup. A shortcut with FSR 4 on (keep) holds its folder, else the one whose root
     # is deepest, i.e. closest to the game: a launcher's shortcut (Ubisoft Connect, whose games sit below it) gets
@@ -186,15 +260,21 @@ def scan(steam_root, keep=()):
     seen = {os.path.realpath(g["target_dir"]) for g in games}
     ids = {g["appid"] for g in games}
     registries = {}
-    rooted = [(s[0], s[1], _shortcut_root(s[2], s[3], registries)) for s in shortcuts(steam_root)]
+    rooted = [(s[0], s[1], _shortcut_root(s[2], s[3], registries), s[3]) for s in shortcuts(steam_root)]
     order = lambda s: (s[0] not in keep, -os.path.normpath(s[2]).count(os.sep))
-    for appid, title, install_dir in sorted((s for s in rooted if s[2]), key=order):
+    for appid, title, install_dir, opts in sorted((s for s in rooted if s[2]), key=order):
         if appid in ids or not os.path.isdir(install_dir):
             continue
-        target, ffx, anticheat = _find_ffx(install_dir)
-        if target and os.path.realpath(target) not in seen:
-            seen.add(os.path.realpath(target))
+        info, anticheat = _find_ffx(install_dir)
+        if info and os.path.realpath(info["target_dir"]) not in seen:
+            seen.add(os.path.realpath(info["target_dir"]))
             ids.add(appid)
-            games.append({"appid": appid, "name": title, "install_dir": install_dir, "target_dir": target,
-                          "ffx_dll": ffx, "anticheat": anticheat})
+            games.append({
+                "appid": appid,
+                "name": title,
+                "install_dir": install_dir,
+                **info,
+                "anticheat": anticheat,
+                "radv_cswave32": fsr4_env.has_radv_cswave32(opts),
+            })
     return sorted(games, key=lambda g: g["name"].lower())

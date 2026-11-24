@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: BSD-3-Clause
 // Copyright (c) 2026 Rayekkk
 
-// Small helpers of the panel: labels, online games, Decky Launch Options and the clipboard.
-import { Game, State } from "./api";
+// Small helpers of the panel: labels, variants, warnings, online games, Decky Launch Options and the clipboard.
+import { Game, State, VariantId } from "./api";
 
 // Steam store categories that mean online play: MMO, Cross-Platform Multiplayer, Online PvP, Online Co-op.
 // The generic Multi-player (1) and PvP (49) also cover local-only games, so they do not count.
@@ -29,10 +29,80 @@ export const VERDICT_LABEL: Record<Game["verdict"], string> = {
   unknown: "Not verified yet",
 };
 
+export interface VariantMeta {
+  id: VariantId;
+  label: string;
+  summary: string;
+  lossy?: boolean;
+  cyboman?: boolean;
+}
+
+export const VARIANTS: VariantMeta[] = [
+  { id: "off", label: "Off (Original)", summary: "Restore original game files and launch options." },
+  {
+    id: "4.1.2l-exact",
+    label: "4.1.2l-exact (Recommended)",
+    summary: "FSR 4.1.2 Lite, bit-exact to AMD Lite (~11–16% faster on RDNA 2).",
+    cyboman: true,
+  },
+  {
+    id: "4.1.2l-lossy",
+    label: "4.1.2l-lossy",
+    summary: "FSR 4.1.2 Lite, alternating-frame neural pass (~13–22% faster, ~2.1 ms @ 800p).",
+    lossy: true,
+    cyboman: true,
+  },
+  {
+    id: "exact",
+    label: "exact",
+    summary: "Full FSR 4.1.2 (RDNA 2 model), bit-exact to AMD.",
+    cyboman: true,
+  },
+  {
+    id: "lossy",
+    label: "lossy",
+    summary: "Full FSR 4.1.2, alternating-frame neural pass.",
+    lossy: true,
+    cyboman: true,
+  },
+  {
+    id: "official-lite",
+    label: "Official AMD Lite",
+    summary: "Unmodified AMD amdxcffx64.dll + amdxc64 shim (no OptiScaler needed).",
+  },
+];
+
+export const VARIANT_BY_ID = Object.fromEntries(VARIANTS.map(v => [v.id, v])) as Record<VariantId, VariantMeta>;
+
+export const isLossyVariant = (v?: VariantId) => v === "4.1.2l-lossy" || v === "lossy";
+export const isCybomanVariant = (v?: VariantId) =>
+  v === "4.1.2l-exact" || v === "4.1.2l-lossy" || v === "exact" || v === "lossy";
+
 export const MB = (b: number) => `${(b / 2 ** 20).toFixed(0)} MB`;
 
-export const ANTICHEAT_WARNING = "Anti-cheat detected: adding DLLs to this game can get you kicked or banned in online play. " +
-  "Turning FSR4 on is at your own risk.";
+export const ANTICHEAT_WARNING =
+  "Anti-cheat detected: modified Cyboman DLLs MUST ONLY be used in single-player / offline games. " +
+  "Using modified or injected DLLs here can get your account banned.";
+
+export const CYBOMAN_ONLINE_WARNING =
+  "Online multiplayer detected: Cyboman builds are modified DLLs for single-player / offline games only " +
+  "(skipped by bulk actions).";
+
+export const LOSSY_TRADEOFF_WARNING =
+  "Alternating-frame neural pass: runs the FSR 4 network every other frame and reprojects motion in between. " +
+  "May introduce uneven frame pacing or minor speckling / exposure lag.";
+
+export const RADV_CSWAVE32_WARNING =
+  "RADV_PERFTEST=cswave32 detected: adds ~1.1 ms FSR 4 overhead on SteamOS RADV. Remove cswave32 from launch options.";
+
+/** Inspect launch options string for RADV_PERFTEST=cswave32 (comma-separated or quoted). */
+export const hasRadvCswave32 = (options: string): boolean => {
+  const words = (options || "").match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) ?? [];
+  return words.some(w => {
+    const m = /^RADV_PERFTEST=(["']?)(.*)\1$/.exec(w);
+    return !!m && m[2].split(",").some(flag => flag.trim().toLowerCase() === "cswave32");
+  });
+};
 
 // Decky Launch Options (github.com/Rayekkk/DeckyLaunchOptions) imports launch options other plugins offer; it asks the
 // user to confirm. Stable ids make a second import update these entries instead of adding new ones.
@@ -40,11 +110,15 @@ export const hasLaunchOptionsPlugin = () =>
   typeof window !== "undefined" && !!(window as Window & { hasDeckyLaunchOptions?: boolean }).hasDeckyLaunchOptions;
 export const offerToLaunchOptionsPlugin = (copy: State["copy_options"]) => {
   const [token, watermark] = copy.watermark.replace(" %command%", "").split(" ");
+  const cybomanWatermark = copy.cyboman_watermark.replace(" %command%", "");
   window.dispatchEvent(new CustomEvent("dlo-add-launch-options", {
     detail: [
-      { id: "fsr4-injector", group: "FSR4 Injector", name: "FSR4 Injector", on: token, off: "", enableGlobally: false },
+      { id: "fsr4-injector", group: "FSR4 Injector", name: "FSR4 Injector (Official AMD Lite)", on: token, off: "",
+        enableGlobally: false },
       { id: "fsr4-injector-watermark", group: "FSR4 Injector", name: "AMD FSR4 watermark", on: watermark, off: "",
         enableGlobally: false },
+      { id: "fsr4-cyboman-watermark", group: "FSR4 Injector", name: "Cyboman FSR4 watermark", on: cybomanWatermark,
+        off: "", enableGlobally: false },
     ],
   }));
 };

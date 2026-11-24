@@ -159,7 +159,7 @@ export function AboutPage({ name, version, description, license, source, notes, 
     <PanelSection title={name}>
       {infoRow(`Version ${version}`, description)}
       {infoRow("Author", <>{["XenoSlug", license, source].filter(Boolean).join(" · ")}{notes && <div>{notes}</div>}</>)}
-      {infoRow("Credits", "Forked from Rayekkk/FSR4Injector (Rayek)")}
+      {infoRow("Credits", "Forked from Rayekkk/FSR4Injector · Cyboman RDNA 2 overrides by zgauthier2000/fsr4-shader-performance-overrides")}
       {credits.map(([label, text]) => <div key={label}>{infoRow(label, text)}</div>)}
     </PanelSection>
     {children}

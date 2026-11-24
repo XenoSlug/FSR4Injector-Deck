@@ -60,5 +60,5 @@ jobs:
             echo "Creating new release $TAG..."
             gh release create "$TAG" artifacts/*.zip artifacts/*.zip.sha256 \
               --title "FSR4 Injector (Deck) $TAG" \
-              --notes "Official AMD FSR 4.1.2 Lite upscaler optimized for Steam Deck (Van Gogh LCD & OLED) under Proton."
+              --notes "Steam Deck (Van Gogh / RDNA 2) FSR 4.1.2 Variant Manager integrating Cyboman RDNA 2 overrides and Official AMD Lite under Proton."
           fi

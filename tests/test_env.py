@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2026 Rayekkk
 
-"""Noticing SteamOS/Proton updates since FSR4 was last confirmed."""
+"""Noticing SteamOS/Proton updates and RADV_PERFTEST=cswave32 guardrails."""
 
 import os
 import tempfile
@@ -45,8 +45,18 @@ class Env(unittest.TestCase):
                          ["SteamOS 3.9.5 (20261023.100) → 3.9.6 (20261101.1)", "Proton proton-11.0-2e → proton-11.0-3"])
 
     def test_unknown_values_are_not_a_change(self):
-        fp = E.fingerprint({}, self.osr)  # old shim without compat_tool
+        fp = E.fingerprint({}, self.osr)
         self.assertEqual(E.changes(fp, self.osr), [])
+
+    def test_radv_cswave32_detection(self):
+        for opts in (
+            "RADV_PERFTEST=cswave32 %command%",
+            'RADV_PERFTEST="gpl,cswave32" %command%',
+            "env RADV_PERFTEST=sam,CSWAVE32 %command% -dx12",
+        ):
+            self.assertTrue(E.has_radv_cswave32(opts), opts)
+        for opts in ("", "%command%", "RADV_PERFTEST=gpl,sam %command%", "MANGOHUD=1 %command%"):
+            self.assertFalse(E.has_radv_cswave32(opts), opts)
 
 
 if __name__ == "__main__":

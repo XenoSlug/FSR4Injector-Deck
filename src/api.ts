@@ -7,12 +7,23 @@ import { callable } from "@decky/api";
 import { UpdateCheck, UpdateDownload } from "./about";
 import { Result, settle } from "./result";
 
+export type BackendKind = "cyboman" | "native";
+export type VariantId = "off" | "4.1.2l-exact" | "4.1.2l-lossy" | "exact" | "lossy" | "official-lite";
+
 export interface Game {
   appid: number;
   name: string;
   target_dir: string;
   anticheat: boolean;
   enabled: boolean;
+  backend?: BackendKind | null;
+  variant?: VariantId;
+  release_tag?: string;
+  native_eligible?: boolean;
+  cyboman_eligible?: boolean;
+  optiscaler_detected?: boolean;
+  upscaler_version?: string | null;
+  radv_cswave32?: boolean;
   verdict: "ok" | "changed" | "unused" | "failed" | "unknown";
   reason: string;
   managed_options?: boolean; // the plugin set this game's launch options
@@ -29,6 +40,20 @@ export interface Gpu {
 }
 
 export interface Download { state: "idle" | "running" | "done" | "error"; done: number; total: number; error: string }
+export interface CybomanDownload extends Download { stage: string }
+
+export interface CybomanState {
+  ready: boolean;
+  tag: string;
+  extracted_from: string;
+  latest_tag: string;
+  update_available: boolean;
+  extractor: string;
+  repo: string;
+  variants: string[];
+  expected_pe_version: string;
+  download: CybomanDownload;
+}
 
 export interface State {
   version: string;
@@ -39,15 +64,22 @@ export interface State {
   recipe: { driver: string; fsr: string; dll_size: number };
   eula_url: string;
   download: Download;
+  cyboman: CybomanState;
   settings: { auto_launch_options: boolean; watermark: boolean; session_toast: boolean };
-  copy_options: { plain: string; watermark: string };
+  copy_options: { plain: string; watermark: string; cyboman_watermark: string };
   scanned: boolean;
   error: string; // the manifest cannot be trusted: no game can be changed
   games: Game[];
 }
 
 export type StateResult = Result<State>;
-export type ToggleResult = StateResult & { launch_options?: string; kept?: string[] };
+export type ToggleResult = StateResult & {
+  launch_options?: string;
+  kept?: string[];
+  pe_mismatch?: boolean;
+  detected_version?: string;
+  expected_version?: string;
+};
 
 const rpc = <A extends unknown[], R extends Result<unknown>>(name: string) => {
   const call = callable<A, R>(name);
@@ -59,7 +91,11 @@ export const scanGames = rpc<[], StateResult>("scan_games");
 export const downloadDll = rpc<[], StateResult>("download_dll");
 export const downloadProgress = rpc<[], Result<never> & { download?: Download; dll_ready?: boolean }>("download_progress");
 export const cancelDownload = rpc<[], StateResult>("cancel_download");
-export const enableGame = rpc<[number, string], ToggleResult>("enable_game");
+export const checkCybomanRelease = rpc<[], StateResult>("check_cyboman_release");
+export const downloadCyboman = rpc<[], StateResult>("download_cyboman");
+export const cybomanProgress = rpc<[], Result<never> & { download?: CybomanDownload; cyboman_ready?: boolean }>("cyboman_progress");
+export const cancelCybomanDownload = rpc<[], StateResult>("cancel_cyboman_download");
+export const enableGame = rpc<[number, string, VariantId?, boolean?], ToggleResult>("enable_game");
 export const disableGame = rpc<[number, string], ToggleResult>("disable_game");
 export const launchOptionsSaved = rpc<[number, string], StateResult>("launch_options_saved");
 export const sessionStarted = rpc<[number], Result<never> & { managed?: boolean; watch?: boolean }>("session_started");
@@ -74,9 +110,6 @@ export const performUpdate = rpc<[string], UpdateDownload>("perform_update");
 
 export const off = (u: SteamUnregister | undefined) => (typeof u === "function" ? u() : u?.unregister());
 
-// Current launch options straight from Steam. Rejects instead of guessing, so the user's own options are never lost.
-// Right after a write a non-Steam shortcut first reports its old options and the new ones a moment later, so a
-// read-back that expects a value waits up to a second for it, then takes what Steam said last.
 export const readLaunchOptions = (appid: number, expected?: string) =>
   new Promise<string>((resolve, reject) => {
     let done = false, last: string | undefined;
@@ -97,8 +130,6 @@ export const readLaunchOptions = (appid: number, expected?: string) =>
     });
   });
 
-// Writes launch options to Steam, reads back what Steam kept and tells the backend, so turning FSR4 off later
-// restores the user's own options exactly (and a write Steam did not keep is reported, not assumed).
 export const saveLaunchOptions = async (appid: number, options: string) => {
   SteamClient.Apps.SetAppLaunchOptions(appid, options);
   return launchOptionsSaved(appid, await readLaunchOptions(appid, options));

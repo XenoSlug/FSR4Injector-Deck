@@ -7,67 +7,47 @@
 [![Requires](https://img.shields.io/badge/requires-Decky_Loader-15803D?style=for-the-badge&labelColor=141417)](https://decky.xyz)
 [![License](https://img.shields.io/badge/license-BSD--3_+_LGPL--2.1-424A53?style=for-the-badge&labelColor=141417)](#license)
 
-**AMD's official FSR 4.1.2 upscaler (Lite model) on your Steam Deck (LCD & OLED), in SteamOS Gaming Mode.**
+**Steam Deck (Van Gogh / RDNA 2) FSR 4.1.2 Variant Manager for SteamOS Gaming Mode.**
 
-Turn it on per game directly from the Quick Access Menu: AMD's authentic, unmodified FSR 4.1.2 library with the INT8 Lite neural model, running in DirectX 12 games that support FSR 3.1+. No OptiScaler translation layer, no patched binaries on disk.
+Switch per game between **`zgauthier2000/fsr4-shader-performance-overrides`** (Cyboman's optimized RDNA 2 builds) and **AMD's official unmodified FSR 4.1.2 Lite** baseline directly from the Decky Quick Access Menu—with SHA-256 verified backups, clean rollback, and SteamOS RADV guardrails.
 
-[Features](#features) · [Requirements](#requirements) · [Deck Performance Guide](#steam-deck-performance-guide) · [Installation](#installation) · [Quick start](#quick-start) · [Troubleshooting](#troubleshooting) · [How it works](#how-it-works)
+[Dual Backends](#dual-backends) · [Steam Deck Expectations](#steam-deck-expectations--800p-timings) · [Requirements](#requirements) · [Installation](#installation) · [Rollback](#clean-rollback) · [Credits & License](#credits--upstream)
 
 </div>
 
 ---
 
-## What makes this Steam Deck Edition special?
+## Dual Backends
 
-This fork of [Rayekkk/FSR4Injector](https://github.com/Rayekkk/FSR4Injector) is tailored and verified for the **Valve Steam Deck**:
+1. **Cyboman RDNA 2 Overrides (Primary for Steam Deck — OptiScaler / FSR 4.1.1):**
+   - Fetches `fsr4.1.2-igpu-cyboman-rdna2-*` from GitHub Releases (`zgauthier2000/fsr4-shader-performance-overrides`), using `.7z` (~9 MB) when `7zz`/`7z`/`bsdtar` is present and automatically falling back to `.zip` (~100 MB) via Python `zipfile`.
+   - Exposes all four RDNA 2 iGPU variants for `amd_fidelityfx_upscaler_dx12.dll`:
+     - **`4.1.2l-exact` *(Recommended)*:** FSR 4.1.2 Lite, bit-exact to AMD Lite (~11–16% faster on RDNA 2).
+     - **`4.1.2l-lossy`:** FSR 4.1.2 Lite with alternating-frame neural pass (~13–22% faster, ~2.1 ms @ 800p; trades some frame pacing & exposure/speckle accuracy).
+     - **`exact`:** Full FSR 4.1.2 (RDNA 2 model), bit-exact to AMD.
+     - **`lossy`:** Full FSR 4.1.2 with alternating-frame neural pass.
+   - Verifies PE `FileVersion` (`4.1.1.2740` expected), backs up the original DLL to `amd_fidelityfx_upscaler_dx12.dll.fsr4deck.orig` with SHA-256 tracking, and uses same-filesystem hard links to avoid wasting Deck SSD space.
 
-1. **Native Steam Deck LCD & OLED Support:**
-   - Pre-configured detection for both **Steam Deck LCD (Van Gogh / Aerith `0x163F`)** and **Steam Deck OLED (Sephiroth `0x1435`)**.
-   - Van Gogh (family `144`) is promoted to verified first-class status.
-2. **Hardcoded Hardware Fallback Table:**
-   - Both Steam Deck device IDs (`0x163F` and `0x1435`) are baked directly into the `amdxc64.dll` C driver extension shim as well as the Python backend, ensuring the AMD library always receives the correct GPU family (`144`) even if per-game `.gpu` files are deleted, unreadable, or missing.
-3. **Optimized Scanner:**
-   - Scans library roots (including SD cards and non-Steam shortcuts) down to depth 7 so deeply nested Unreal Engine 5 binaries are never missed.
-4. **Automated CI/CD Releases:**
-   - Automated MinGW-w64 cross-compilation of `amdxc64.dll` and Node.js 24 frontend bundling producing installable release ZIPs on every release tag.
+2. **Official AMD Lite (Baseline / Fallback — No OptiScaler Required):**
+   - Retains the unmodified `amdxcffx64.dll` (~43 MB from `drivers.amd.com`) + open-source `amdxc64.dll` shim (`WINEDLLOVERRIDES=amdxc64=n,b`) for native DX12 FSR 3.1+ games.
+   - Switching a game between `Off`, any `Cyboman RDNA 2` variant, and `Official AMD Lite` automatically rolls back the previous backend first.
 
----
-
-## Features
-
-| Feature | What you get |
-|---|---|
-| **One-tap setup** | Downloads AMD's authentic FSR 4.1.2 library directly from AMD's servers (~43 MB) and validates its SHA-256 |
-| **Per-game switch** | Automatically scans and lists installed games with native FSR 3.1+ support (`amd_fidelityfx_*.dll`), allowing per-game toggles |
-| **Clean launch options** | Automatically manages `WINEDLLOVERRIDES=amdxc64=n,b` in Steam launch options, cleanly merging with existing user overrides |
-| **Verification & watermark** | AMD's real-time watermark on demand (`FSR_WATERMARK=1`), plus per-session validation in `fsr4injector.status.json` |
-| **Zero risk to system** | Completely contained in user-space; leaves Proton and system libraries 100% untouched |
-| **Clean rollback** | Turning a game off completely removes the DLL links and restores original launch options |
+> [!CAUTION]
+> **Single-player / offline games only for Cyboman variants.** Cyboman DLLs are **modified binaries**. Anti-cheat software can treat replaced upscaler DLLs as tampering and ban your account. Anti-cheat and online multiplayer titles are explicitly flagged and excluded from bulk actions.
 
 ---
 
-## Steam Deck Performance & Resolution Guide
+## Steam Deck Expectations & 800p Timings
 
-> [!IMPORTANT]
-> The Steam Deck's Van Gogh APU operates on a **15W total SoC budget with 8 RDNA 2 Compute Units (CUs)**. Unlike RDNA 3/3.5, RDNA 2 lacks hardware WMMA matrix engines and executes INT8 neural upscaling via `v_dot4_i32_i8` (DP4A) instructions.
->
-> Running AMD's FSR 4.1.2 Lite neural network adds approximately **1.5 ms to 2.2 ms of compute time per frame** on the Deck's 8 CUs.
-
-### Real Upscaling Resolutions on Steam Deck:
-
-FSR modes apply fixed per-axis scaling ratios to the game's display canvas. Below are the exact internal render resolutions and pixel savings on the Deck:
-
-| FSR Mode | Scale Factor | 16:10 Native (1280×800) | 16:9 Letterbox (1280×720) | Pixel Reduction | Typical Deck Raster Savings |
-|---|---|---|---|---|---|
-| **Quality** | $1.5\times$ (66.7%) | **854 × 534** (~456k px) | **854 × 480** (~410k px) | **-55.5%** | **~3.5 ms to 5.5 ms** |
-| **Balanced** | $1.7\times$ (58.8%) | **752 × 470** (~353k px) | **752 × 424** (~318k px) | **-65.5%** | **~5.0 ms to 7.0 ms** |
-| **Performance** | $2.0\times$ (50.0%) | **640 × 400** (~256k px) | **640 × 360** (~230k px) | **-75.0%** | **~6.5 ms to 8.5 ms** |
-| **Ultra Perf** | $3.0\times$ (33.3%) | **426 × 266** (~113k px) | **426 × 240** (~102k px) | **-88.9%** | **~8.0 ms+** |
-
-### How to tune settings for maximum FPS & battery life:
-* **Quality Mode ($854 \times 534$ / $854 \times 480$):** Renders only **44.5% of native pixels**. Even with the ~1.8 ms neural pass, the raster savings produce a net positive framerate boost (+20% to +35% FPS) while delivering near-native clarity and stable edges on the Deck's 7" display.
-* **Balanced Mode ($752 \times 470$ / $752 \times 424$):** The sweet spot for demanding AAA games. Cuts rasterizer time by 5–7 ms, easily overpowering the 1.8 ms neural cost to help lock 40 FPS or 45 FPS on OLED.
-* **Performance Mode ($640 \times 400$ / $640 \times 360$):** Best for very demanding titles (such as Unreal Engine 5 or heavy ray-traced lighting). FSR 4 Lite's neural temporal reconstruction reconstructs clean edges from 400p/360p with far fewer disocclusion artifacts and shimmer than legacy FSR 2 / 3.1.
+- **Hardware budget:** Steam Deck LCD (`0x163F`, Aerith) & OLED (`0x1435`, Sephiroth) share an 8-CU RDNA 2 Van Gogh APU under a 15W SoC envelope, executing INT8 FSR 4 inference via `v_dot4_i32_i8` (DP4A).
+- **Target frame rates:** Aim for **30 FPS** (Quality/Balanced) or **40–45 FPS** (Balanced/Performance) depending on the game's base GPU load.
+- **800p shader pass timings:**
+  - `4.1.2l-exact` trims FSR 4 Lite pass overhead (~11–16% faster than stock AMD Lite on RDNA 2) with zero visual difference.
+  - `4.1.2l-lossy` lowers the upscaling pass to **~2.1 ms at 800p** (~13–22% faster) by running the neural network every second frame and motion-reprojecting in between. If you notice subtle frame-pacing variance at 30 FPS or minor speckling, switch that game back to `4.1.2l-exact`.
+- **Avoid `RADV_PERFTEST=cswave32`:** On SteamOS RADV, forcing `cswave32` adds **~1.1 ms** overhead to FSR 4 compute passes. The plugin detects `RADV_PERFTEST=cswave32` in game launch options and displays a warning badge.
+- **Watermark verification:** Toggle **Show FSR4 watermark** in Launch options:
+  - Cyboman games receive `env MLSR-WATERMARK=1` (wrapped with `env` because hyphens fail in `/bin/sh`) to show strings like `4.1.2l-lossy-igpu-r2-cyboman`.
+  - Official AMD Lite games receive `FSR_WATERMARK=1`.
 
 ---
 
@@ -75,79 +55,42 @@ FSR modes apply fixed per-axis scaling ratios to the game's display canvas. Belo
 
 | Requirement | Details |
 |---|---|
-| **Hardware** | Steam Deck LCD (Aerith, `0x163F`) or Steam Deck OLED (Sephiroth, `0x1435`) |
-| **Operating System** | SteamOS in Gaming Mode with [Decky Loader](https://decky.xyz) |
-| **Compatibility Tool** | Proton 11 or Proton Experimental |
-| **Games** | DirectX 12 games that natively ship `amd_fidelityfx_dx12.dll`, `amd_fidelityfx_upscaler_dx12.dll`, or `amd_fidelityfx_loader_dx12.dll` (FSR 3.1+) |
-| **Network** | Internet connection once to download AMD's library (~43 MB) from `drivers.amd.com` |
-
-*Note: Monolithic FSR 2, FSR 3.0, and pure Vulkan games without FidelityFX DX12 modular loaders are not supported by the native driver injector.*
+| **Hardware** | Steam Deck LCD (`0x163F`) or Steam Deck OLED (`0x1435`) |
+| **OS / Loader** | SteamOS Gaming Mode with [Decky Loader](https://decky.xyz) |
+| **For Cyboman RDNA 2** | Game configured with **OptiScaler** or modular FidelityFX SDK 2.x providing `amd_fidelityfx_upscaler_dx12.dll` (typically `4.1.1.2740`) |
+| **For Official AMD Lite** | DirectX 12 game with native `amd_fidelityfx_dx12.dll`, `amd_fidelityfx_upscaler_dx12.dll`, or `amd_fidelityfx_loader_dx12.dll` (FSR 3.1+) |
 
 ---
 
 ## Installation
 
-1. Install [Decky Loader](https://decky.xyz) if you have not already done so.
-2. Download the latest `FSR4Injector-<version>.zip` from [Releases](https://github.com/XenoSlug/FSR4Injector-Deck/releases).
-3. On your Deck (in Gaming Mode):
-   - Open **Quick Access Menu (...) → Decky → Settings (gear icon)**.
-   - Under **General**, toggle on **Developer mode**.
-   - Navigate to the **Developer** tab, choose **Install Plugin from ZIP**, and select the downloaded ZIP file.
-4. Open **FSR4 Injector** in your Decky plugin menu.
+1. Download `FSR4Injector-<version>.zip` from [Releases](https://github.com/XenoSlug/FSR4Injector-Deck/releases).
+2. In Decky Loader: **Settings → General → Developer mode**, then **Developer → Install Plugin from ZIP**.
+3. Open **FSR4 Injector** in the Quick Access Menu, download **Cyboman RDNA 2** (and optionally **Official AMD Lite**), and select a variant per game.
+
+*Note: Existing v1.x installs upgrade in-place cleanly; configured Official AMD Lite games remain tracked and can be toggled off or switched to Cyboman variants at any time.*
 
 ---
 
-## Quick start
+## Clean Rollback
 
-1. Open **FSR4 Injector** in the Quick Access Menu and tap **Accept and download**. This fetches AMD's authentic FSR 4.1.2 library directly from AMD's official Adrenalin driver CDN.
-2. Under **Steam games** or **Non-Steam games**, turn the switch **ON** for your game (e.g., *Ghost of Tsushima*, *God of War Ragnarök*, *Spider-Man*, *Horizon Forbidden West*, *Space Marine 2*).
-3. Launch the game from Steam.
-4. In the game's display/graphics settings:
-   - Select **AMD FSR** as the upscaler.
-   - Set the upscaler quality to **Balanced** or **Performance**.
-5. *(Optional)* Turn on **"Show AMD's FSR4 watermark"** in the plugin launch options to confirm the top-left HUD displays `FSR4 Lite (INT8)` in real time.
-
----
-
-## How it works
-
-AMD's official `amdxcffx64.dll` determines which FSR 4 model to execute by querying private kernel driver data (`D3DKMTQueryAdapterInfo`, `KMTQAITYPE_UMDRIVERPRIVATE`) for the GPU family and silicon stepping. Under Proton/Wine, this driver query returns nothing, forcing AMD's library to fall back to legacy FSR 3.
-
-```
-Game (D3D12 + FSR 3.1 SDK)
-     │
-     ▼
-amd_fidelityfx_dx12.dll
-     │
-     ▼
-amdxc64.dll (Our Open-Source Shim via WINEDLLOVERRIDES)
-     │  Interceps D3DKMTQueryAdapterInfo
-     │  Reports Family 144 (Van Gogh) & Revision 3
-     ▼
-amdxcffx64.dll (Official Signed AMD FSR 4.1.2 Library)
-     │  Matches Family 144 -> Selects INT8_LITE model
-     ▼
-VKD3D-Proton / RADV (Vulkan VK_KHR_shader_integer_dot_product)
-     │  Executes INT8 DP4A neural inference on Van Gogh CUs
-     ▼
-Output to Screen (Crisp Reconstruction at 800p)
-```
-
-AMD's authentic signed library remains completely untouched on disk. Nothing is modified in the OS or Proton runtime.
+- Set a game back to **Off (Original)** (or tap **Turn off FSR4 and restore all games** before uninstalling):
+  - **Cyboman games:** Verifies that the active `amd_fidelityfx_upscaler_dx12.dll` SHA-256 matches the variant we installed, restores `amd_fidelityfx_upscaler_dx12.dll.fsr4deck.orig` atomically, verifies the restored hash, and removes `env MLSR-WATERMARK=1`. Unrecognized or externally modified DLLs are never deleted or overwritten.
+  - **Official AMD Lite games:** Removes our `amdxc64.dll`, `amdxcffx64.dll`, `fsr4injector.gpu`, and `WINEDLLOVERRIDES=amdxc64=n,b` / `FSR_WATERMARK=1` cleanly.
 
 ---
 
 ## Credits & Upstream
 
-- [Rayekkk/FSR4Injector](https://github.com/Rayekkk/FSR4Injector) - The original project architecture, LZMA2 streaming recipe, and Decky implementation.
-- **Etaash Mathamsetty** and [GE-Proton](https://github.com/GloriousEggroll/proton-ge-custom) - The original `amdxc64` D3D12 extension implementation.
-- [vkd3d-proton](https://github.com/HansKristian-Work/vkd3d-proton) - D3D12 to Vulkan translation on Linux.
-- [Decky Loader](https://github.com/SteamDeckHomebrew/decky-loader) - Handheld plugin loader for SteamOS.
+- [Rayekkk/FSR4Injector](https://github.com/Rayekkk/FSR4Injector) — Upstream Decky plugin architecture, LZMA2 streaming recipe, safety guarantees, and `amdxc64` shim.
+- [zgauthier2000/fsr4-shader-performance-overrides](https://github.com/zgauthier2000/fsr4-shader-performance-overrides) — Cyboman's RDNA 2 / Steam Deck shader performance override builds (`4.1.2l-exact`, `4.1.2l-lossy`, `exact`, `lossy`).
+- **Etaash Mathamsetty** & [GE-Proton](https://github.com/GloriousEggroll/proton-ge-custom) — Original `amdxc64` D3D12 extension implementation.
+- [vkd3d-proton](https://github.com/HansKristian-Work/vkd3d-proton) & [Decky Loader](https://github.com/SteamDeckHomebrew/decky-loader).
 
 ---
 
 ## License
 
-Plugin code: [BSD 3-Clause](LICENSE).
-Shim (`bin/amdxc64.dll` & `shim/`): [LGPL-2.1 or later](shim/COPYING.LIB).
-AMD software is downloaded separately from AMD's CDN and remains under AMD's EULA. Not affiliated with AMD or Valve.
+- Plugin code: [BSD 3-Clause](LICENSE).
+- Driver shim (`bin/amdxc64.dll` & `shim/`): [LGPL-2.1 or later](shim/COPYING.LIB).
+- **Third-party binaries are never bundled:** Downloaded Cyboman builds are governed by `zgauthier2000/fsr4-shader-performance-overrides`'s **GPL-2.0** license. Optional Official AMD Lite downloads are subject to **AMD's Software EULA**. Not affiliated with AMD or Valve.
